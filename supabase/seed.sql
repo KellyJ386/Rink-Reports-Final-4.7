@@ -223,6 +223,43 @@ values
 on conflict (user_id, role_id) do nothing;
 
 -- ============================================================================
+-- Seed facility_subscriptions + facility_resources (Agent 1b)
+-- ============================================================================
+
+-- Subscription rows for test facilities (trialing, 30-day trial)
+insert into public.facility_subscriptions
+  (facility_id, status, plan_tier, trial_end)
+values
+  ('00000001-0000-0000-0000-000000000001', 'trialing', 'trial', now() + interval '30 days'),
+  ('00000002-0000-0000-0000-000000000002', 'trialing', 'trial', now() + interval '30 days')
+on conflict (facility_id) do nothing;
+
+-- Example facility_resources (so modules that reference from_resource_type have data)
+-- Alpha: 2 surfaces, 2 compressors, 1 zamboni, 1 air quality device, 3 shift positions
+insert into public.facility_resources (facility_id, resource_type, name, sort_order)
+values
+  ('00000001-0000-0000-0000-000000000001', 'surface', 'Main Rink', 1),
+  ('00000001-0000-0000-0000-000000000001', 'surface', 'Studio Rink', 2),
+  ('00000001-0000-0000-0000-000000000001', 'compressor', 'Compressor #1', 1),
+  ('00000001-0000-0000-0000-000000000001', 'compressor', 'Compressor #2', 2),
+  ('00000001-0000-0000-0000-000000000001', 'zamboni', 'Zamboni 550', 1),
+  ('00000001-0000-0000-0000-000000000001', 'air_quality_device', 'Sensor A (lobby)', 1),
+  ('00000001-0000-0000-0000-000000000001', 'shift_position', 'Front Desk', 1),
+  ('00000001-0000-0000-0000-000000000001', 'shift_position', 'Zamboni Driver', 2),
+  ('00000001-0000-0000-0000-000000000001', 'shift_position', 'Skate Rental', 3)
+on conflict do nothing;
+
+-- Beta: 1 surface, 1 compressor, 1 zamboni, 2 shift positions
+insert into public.facility_resources (facility_id, resource_type, name, sort_order)
+values
+  ('00000002-0000-0000-0000-000000000002', 'surface', 'Olympic Rink', 1),
+  ('00000002-0000-0000-0000-000000000002', 'compressor', 'Compressor #1', 1),
+  ('00000002-0000-0000-0000-000000000002', 'zamboni', 'Zamboni 552', 1),
+  ('00000002-0000-0000-0000-000000000002', 'shift_position', 'Front Desk', 1),
+  ('00000002-0000-0000-0000-000000000002', 'shift_position', 'Zamboni Driver', 2)
+on conflict do nothing;
+
+-- ============================================================================
 -- Example audit_log entries (prove the table works end-to-end in seed)
 -- ============================================================================
 
