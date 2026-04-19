@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  @apply bg-white text-ink;
+}
+
+body {
+  @apply font-sans antialiased;
+}
+
+/* Minimum tap target on touch inputs */
+input, button, select, textarea, [role="button"] {
+  @apply min-h-tap;
+}
+
+/* Inputs wrap at small viewports without horizontal scroll */
+input, textarea, select {
+  @apply w-full rounded-md border border-hairline px-3 py-2;
+}
+
+input:focus, textarea:focus, select:focus {
+  @apply outline-none ring-2 ring-accent border-accent;
+}
+
+textarea {
+  min-height: 88px;
+}
+
+label {
+  @apply flex flex-col gap-1 text-sm font-medium text-ink;
+}
+
+button[type="submit"] {
+  @apply bg-accent text-white px-4 rounded-md font-medium;
+}
+
+button[type="submit"]:disabled {
+  @apply bg-muted opacity-70 cursor-not-allowed;
+}
+
+a {
+  @apply text-accent underline underline-offset-2;
+}
+
+main {
+  @apply max-w-3xl mx-auto px-4 py-6;
+}
