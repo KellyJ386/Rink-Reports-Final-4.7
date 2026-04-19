@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { FormHistory, type FormHistoryColumn } from '@/components/form-history/FormHistory'
+import { requireModuleEnabled } from '@/lib/modules/require-enabled'
 
 const COLUMNS: FormHistoryColumn[] = [
   { key: 'submitted_at', label: 'Submitted', source: 'submitted_at', format: 'datetime' },
@@ -9,7 +10,8 @@ const COLUMNS: FormHistoryColumn[] = [
   { key: 'doors_clear', label: 'Doors clear?', source: 'custom.doors_clear' },
 ]
 
-export default function CircleCheckHistoryPage() {
+export default async function CircleCheckHistoryPage() {
+  await requireModuleEnabled('ice_maintenance')
   return (
     <main>
       <div className="flex items-center justify-between">

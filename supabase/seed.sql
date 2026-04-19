@@ -249,12 +249,15 @@ values
   ('00000001-0000-0000-0000-000000000001', 'shift_position', 'Skate Rental', 3)
 on conflict do nothing;
 
--- Beta: 1 surface, 1 compressor, 1 zamboni, 2 shift positions
+-- Beta: 1 surface, 1 compressor, 1 zamboni, 1 air quality device, 2 shift positions
+-- (keep resource coverage in parity with Alpha so every module is fileable in both
+-- facilities; Agent 3's sanity tests depend on this)
 insert into public.facility_resources (facility_id, resource_type, name, sort_order)
 values
   ('00000002-0000-0000-0000-000000000002', 'surface', 'Olympic Rink', 1),
   ('00000002-0000-0000-0000-000000000002', 'compressor', 'Compressor #1', 1),
   ('00000002-0000-0000-0000-000000000002', 'zamboni', 'Zamboni 552', 1),
+  ('00000002-0000-0000-0000-000000000002', 'air_quality_device', 'Sensor B (lobby)', 1),
   ('00000002-0000-0000-0000-000000000002', 'shift_position', 'Front Desk', 1),
   ('00000002-0000-0000-0000-000000000002', 'shift_position', 'Zamboni Driver', 2)
 on conflict do nothing;
