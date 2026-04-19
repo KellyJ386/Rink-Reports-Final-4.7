@@ -1,0 +1,18 @@
+-- supabase/tests/helpers.sql
+-- Shared helpers for pgTAP tests. Not a test file itself; sourced by tests as needed.
+-- Supabase's `supabase test db` runs every .sql file under supabase/tests/ once.
+-- We use `_helpers.sql` naming-wise would hide it, but leaving explicit here and each
+-- test file will create its own helpers inline for self-contained test files.
+
+-- Test user UUIDs (match supabase/seed.sql)
+--   platform admin: 00000000-0000-0000-0000-000000000001
+--   alpha admin:    00000001-0000-0000-0000-000000001001
+--   alpha manager:  00000001-0000-0000-0000-000000001002
+--   alpha staff:    00000001-0000-0000-0000-000000001003
+--   alpha deact:    00000001-0000-0000-0000-000000001004
+--   beta admin:     00000002-0000-0000-0000-000000002001
+--   beta manager:   00000002-0000-0000-0000-000000002002
+--   beta staff:     00000002-0000-0000-0000-000000002003
+--
+--   alpha facility: 00000001-0000-0000-0000-000000000001
+--   beta facility:  00000002-0000-0000-0000-000000000002
