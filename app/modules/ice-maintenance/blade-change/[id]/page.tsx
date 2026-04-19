@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { FormDetail } from '@/components/form-detail/FormDetail'
 import { requireModuleEnabled } from '@/lib/modules/require-enabled'
 
-export default async function CircleCheckDetailPage({
+export default async function BladeChangeDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -13,11 +13,11 @@ export default async function CircleCheckDetailPage({
   return (
     <main>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Circle Check</h1>
-        <Link href="/modules/ice-maintenance/circle-check">← Back to history</Link>
+        <h1 className="text-xl font-semibold">Blade Change</h1>
+        <Link href="/modules/ice-maintenance/blade-change">← Back to history</Link>
       </div>
       <div className="mt-4">
-        <FormDetail moduleSlug="ice_maintenance" formType="circle_check" submissionId={id} />
+        <FormDetail moduleSlug="ice_maintenance" formType="blade_change" submissionId={id} />
       </div>
     </main>
   )

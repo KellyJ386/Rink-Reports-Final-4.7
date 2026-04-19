@@ -50,6 +50,8 @@ Exactly one of `equals`, `not_equals`, or `in` is required:
 
 A hidden field is **not required** by the validator even if its `required: true`. When the condition later becomes true, required-ness re-applies.
 
+**`show_if` on select/radio/multiselect fields matches against the option `key`, not the label.** Option keys are stable (trigger-enforced); labels are editable. Writing `{ "field": "new_blade_source", "equals": "resharpened" }` is correct; writing `{ "field": "new_blade_source", "equals": "Resharpened" }` will silently never match after someone edits the label.
+
 ## Field types
 
 ### `text`, `textarea`
@@ -104,6 +106,10 @@ Resolves to the active items of the facility's `option_list` with `slug = "hazar
 
 Facility admins manage option lists at `/admin/option-lists` (Agent 6).
 
+**Slug naming convention:** option list slugs are **plural snake_case** — `hazards`, `injury_types`, `ice_make_issues`, `surfaces`, `compressors`. Don't mix `injury_type` and `surfaces` in the same codebase. Small discipline, prevents bikeshedding later.
+
+**If the referenced list is missing or has no active items AND the field is `required: true`**, the engine refuses to render the form and surfaces an admin-facing error listing the unfillable field(s). This prevents staff from submitting with a blank-required answer when the list simply hasn't been set up yet. For `required: false` fields, an empty list renders the field with "no options available" and the user can skip it.
+
 ### 3) `from_resource_type`
 
 ```json
@@ -119,6 +125,8 @@ Current well-known resource types (maintained in `facility_resources.resource_ty
 - `zamboni` — ice resurfacers
 - `air_quality_device` — CO/NO₂/particulate sensors
 - `shift_position` — scheduling positions
+
+**If no active resources of the given type exist AND the field is `required: true`**, same behavior as an empty `from_option_list`: the engine refuses to render and surfaces an admin-facing error pointing to `/admin/resources`.
 
 ## Label snapshotting
 
