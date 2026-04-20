@@ -5,18 +5,21 @@
 -- Not tenant-scoped. Modules are global; defaults are global. Per-facility copies land
 -- in form_schemas (Agent 2's table) when enableModule() runs.
 --
--- The coalesce(form_type, '') PK construction handles the nullable-form_type uniqueness
--- problem cleanly: one default per (module_slug, form_type) and one for form_type NULL.
+-- Uniqueness: one default per (module_slug, form_type) AND one for (module_slug,
+-- form_type IS NULL). Postgres disallows function expressions in PK definitions,
+-- so we use a surrogate id PK + a unique expression index on
+-- (module_slug, coalesce(form_type, '')) to collapse the NULL/text cases.
 
 create table if not exists public.module_default_schemas (
+  id                          uuid primary key default gen_random_uuid(),
   module_slug                 text not null references public.modules(slug) on delete cascade,
   form_type                   text,
   default_schema_definition   jsonb not null,
-  updated_at                  timestamptz not null default now(),
-
-  constraint module_default_schemas_pk
-    primary key (module_slug, coalesce(form_type, ''))
+  updated_at                  timestamptz not null default now()
 );
+
+create unique index if not exists module_default_schemas_slug_type_key
+  on public.module_default_schemas (module_slug, coalesce(form_type, ''));
 
 drop trigger if exists module_default_schemas_touch_updated_at on public.module_default_schemas;
 create trigger module_default_schemas_touch_updated_at
