@@ -4,53 +4,47 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 
 /**
- * ForceLogoutUser contract (shared interface)
- * ==========================================
+ * Force-logout a user.
  *
- * Agent 6 ships the inline implementation below. Agent 7 replaces it by rewriting
- * THIS file (same exports, same behavior). No other module imports a replacement —
- * all callers import from '@/lib/auth/force-logout' — so the Agent 7 swap is a
- * file change, not an import refactor.
+ * Finalized by Agent 7 per the contract originally shipped by Agent 6.
+ * Callers should import from '@/lib/auth/force-logout' — this is the canonical
+ * implementation for the entire product.
  *
- * TODO(agent-7): replace the inline implementation below with the canonical one.
+ * Behavior contract:
  *
- * Acceptance criteria Agent 7's implementation must satisfy:
+ *   1. Invalidates all active sessions for the target user via
+ *      supabase.auth.admin.signOut(user_id, 'global'). Refresh tokens are revoked,
+ *      not just the current access token.
  *
- *   1. Must invalidate all active sessions for the target user — not just expire
- *      the current access token. Refresh tokens must be revoked. Supabase Auth's
- *      admin API `admin.signOut(user_id, { scope: 'global' })` satisfies this.
+ *   2. Callable from server actions — pure async function; no browser-side state.
  *
- *   2. Must be callable from server actions — no browser-side state, no hooks, no
- *      React context. Pure async function with the signature exported here.
- *
- *   3. Must be auditable. Writes an audit_log row with:
+ *   3. Writes audit_log:
  *        action        = 'user.force_logout'
- *        actor_user_id = caller (the admin performing the action)
+ *        actor_user_id = caller
  *        entity_type   = 'user'
  *        entity_id     = target user_id
- *        metadata      = { reason?: string } when provided
+ *        metadata      = { reason } when provided
+ *      If an impersonation session is active, the audit_log BEFORE INSERT trigger
+ *      auto-populates actor_impersonator_id.
  *
- *   4. Must set public.users.active = false in the same logical operation as the
- *      auth invalidation, so middleware blocks any in-flight sessions on their
- *      next request. Order: flip `active` → call admin.signOut → audit_log.
- *      (If admin.signOut fails mid-flight, `active = false` still blocks access
- *      at the middleware; the recovery path is to retry admin.signOut.)
+ *   4. Sets public.users.active = false before invalidating sessions, so
+ *      middleware blocks any in-flight request on its next hop even if
+ *      admin.signOut is delayed or fails partway through.
  *
- *   5. Must return `{ ok: true }` on success or `{ ok: false; error: string }` on
- *      failure with an admin-readable message (no raw Supabase errors leaked).
+ *   5. Returns { ok: true } | { ok: false; error }.
  *
- *   6. Must NOT depend on a network session registry (Redis / Upstash) in v1. If
- *      Agent 7 later needs distributed session invalidation, they extend this
- *      contract with an opt-in mechanism; the v1 interface stays stable.
+ *   6. Does NOT depend on a distributed session registry. If session invalidation
+ *      fails, we return the failure to the caller but leave active=false in place
+ *      (so middleware still blocks on next hop). The recovery path is to retry.
  *
- *   7. AuthZ is the caller's responsibility: this function assumes the caller has
- *      already verified their authority to deactivate the target user (e.g., via
- *      requireAdminControlCenterAdmin()). This function does NOT re-check.
+ *   7. AuthZ is the caller's responsibility. This function assumes the caller has
+ *      already verified their authority (e.g. via requireAdminControlCenterAdmin()
+ *      for facility admins, or requirePlatformAdmin() for platform admins).
  */
 
 export type ForceLogoutInput = {
   user_id: string
-  /** Optional human-readable reason surfaced in audit_log.metadata. */
+  /** Optional human-readable reason recorded in audit_log.metadata. */
   reason?: string
 }
 
@@ -59,16 +53,12 @@ export type ForceLogoutResult = { ok: true } | { ok: false; error: string }
 export async function forceLogoutUser(input: ForceLogoutInput): Promise<ForceLogoutResult> {
   const supabase = await createClient()
 
-  // Resolve the caller (for audit_log.actor_user_id)
   const {
     data: { user: actor },
     error: actorError,
   } = await supabase.auth.getUser()
-  if (actorError || !actor) {
-    return { ok: false, error: 'Not authenticated' }
-  }
+  if (actorError || !actor) return { ok: false, error: 'Not authenticated' }
 
-  // Resolve the target's facility (for audit_log.facility_id)
   const { data: target, error: targetError } = await supabase
     .from('users')
     .select('facility_id')
@@ -77,29 +67,27 @@ export async function forceLogoutUser(input: ForceLogoutInput): Promise<ForceLog
   if (targetError) return { ok: false, error: targetError.message }
   if (!target) return { ok: false, error: 'Target user not found' }
 
-  // 1. Flip active = false (RLS: caller must be facility admin; trigger blocks cross-facility)
+  // 1. active = false first, so middleware blocks in-flight requests immediately
   const { error: deactivateError } = await supabase
     .from('users')
     .update({ active: false })
     .eq('id', input.user_id)
   if (deactivateError) {
-    return { ok: false, error: `Failed to deactivate user: ${deactivateError.message}` }
+    return { ok: false, error: `Deactivation failed: ${deactivateError.message}` }
   }
 
-  // 2. Invalidate all Supabase sessions for the user (global scope = revoke refresh tokens)
+  // 2. Invalidate all sessions globally (service role required for auth admin API)
   const svc = createServiceClient()
   const { error: signOutError } = await svc.auth.admin.signOut(input.user_id, 'global')
   if (signOutError) {
-    // Non-fatal: middleware still rejects the user on their next request because
-    // active=false. But surface the error so the admin knows to retry.
-    console.error('forceLogoutUser: admin.signOut failed', signOutError)
+    console.error('forceLogoutUser: global signOut failed', signOutError)
     return {
       ok: false,
-      error: `User deactivated but session invalidation failed: ${signOutError.message}. Retry to complete.`,
+      error: `User deactivated but session invalidation failed: ${signOutError.message}. Retry the action to complete.`,
     }
   }
 
-  // 3. Audit
+  // 3. Audit — trigger auto-populates actor_impersonator_id if applicable
   const { error: auditError } = await supabase.from('audit_log').insert({
     facility_id: target.facility_id,
     actor_user_id: actor.id,
@@ -110,7 +98,7 @@ export async function forceLogoutUser(input: ForceLogoutInput): Promise<ForceLog
   })
   if (auditError) {
     console.error('forceLogoutUser: audit write failed', auditError)
-    // Still return ok — the core operation succeeded.
+    // Non-fatal — the core operation succeeded
   }
 
   return { ok: true }

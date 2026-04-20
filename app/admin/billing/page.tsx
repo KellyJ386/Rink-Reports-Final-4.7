@@ -1,4 +1,7 @@
+import { isStripeConfigured } from '@/lib/billing/stripe'
 import { createClient } from '@/lib/supabase/server'
+
+import { BillingActions } from './BillingActions'
 
 export default async function AdminBillingPage() {
   const supabase = await createClient()
@@ -19,12 +22,13 @@ export default async function AdminBillingPage() {
       )
     : null
 
+  const stripeConfigured = isStripeConfigured()
+  const hasCustomer = !!(sub?.stripe_customer_id as string | null)
+
   return (
     <main>
       <h1 className="text-xl font-semibold">Billing</h1>
-      <p className="text-muted text-sm mt-1">
-        Manage your subscription and payment method.
-      </p>
+      <p className="text-muted text-sm mt-1">Manage your subscription and payment method.</p>
 
       <section className="mt-6 border border-hairline rounded-md p-4 max-w-md">
         <div className="text-xs uppercase tracking-wide text-muted">Subscription</div>
@@ -39,24 +43,17 @@ export default async function AdminBillingPage() {
         )}
         {sub?.current_period_end && (
           <div className="text-sm text-muted mt-1">
-            Next bill:{' '}
-            {new Date(sub.current_period_end as string).toLocaleDateString()}
+            Next bill: {new Date(sub.current_period_end as string).toLocaleDateString()}
           </div>
         )}
       </section>
 
       <section className="mt-6">
-        <button
-          type="button"
-          disabled
-          title="Available once billing is configured"
-          className="bg-muted text-white px-4 py-2 rounded-md font-medium opacity-70 cursor-not-allowed"
-        >
-          Manage billing
-        </button>
-        <p className="text-xs text-muted mt-2">
-          Available once billing is configured — Agent 7 wires the Stripe Customer Portal.
-        </p>
+        <BillingActions
+          subscriptionStatus={status}
+          stripeConfigured={stripeConfigured}
+          hasCustomer={hasCustomer}
+        />
       </section>
     </main>
   )
