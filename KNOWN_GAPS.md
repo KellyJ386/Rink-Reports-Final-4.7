@@ -134,6 +134,11 @@ list is Agent 9's job; resolving items is the owning agent's.
 
 ### Hard blockers
 
+- [ ] **Integration + E2E + E2E-Realtime jobs are `continue-on-error: true` in `.github/workflows/pr.yml`.** The jobs run and surface failures, but do not gate merge. This is a temporary compromise shipped with Agent 9 phase-1. Graduation criteria to remove `continue-on-error`:
+  - Test-facility fixtures via real-auth-flow factories (not raw-SQL bcrypt seed inserts, which are fragile across Supabase CLI versions)
+  - Deterministic UI label selectors — currently E2E tests bind to `getByLabel(/email/i)` etc., which are stable enough for today's shell but would break if any module agent renames a form field
+  - Seeded password-grant sign-in verified against the same CLI version CI uses
+  Owner: Agent 9 phase-2. **Must flip to blocking before production launch.**
 - [ ] **Rate limiting is single-instance in-memory.** `/api/accept-invite` uses an in-memory token bucket; a multi-instance deploy loses the guarantee. Owner: Agent 7. Acceptance: Upstash-backed or equivalent shared limiter on at least `/accept-invite`, `/api/stripe/webhook`, and any future high-value endpoint.
 - [ ] **Stripe fixture files are not yet committed.** `tests/fixtures/stripe/README.md` documents the capture process but the JSON files are absent. Without them, the phase-2 "Stripe trial → active" E2E can't land. Owner: Agent 7 (first Stripe integration pass).
 - [ ] **No realistic-volume perf seed.** `scripts/seed-perf.ts` doesn't exist. Without it, perf regressions ship silently.

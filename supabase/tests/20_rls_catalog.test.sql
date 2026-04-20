@@ -13,7 +13,7 @@
 -- phase-2 expansion point for Agent 9.
 
 begin;
-select plan(96);
+select plan(98);
 
 create or replace function _test_as(p_user_id uuid) returns void
 language sql as $$
@@ -22,6 +22,14 @@ language sql as $$
            json_build_object('sub', p_user_id::text, 'role', 'authenticated')::text,
            true);
 $$;
+
+-- ----------------------------------------------------------------
+-- Seed integrity preflight
+-- ----------------------------------------------------------------
+select cmp_ok((select count(*)::int from public.users where id = '00000001-0000-0000-0000-000000001003'::uuid),
+  '=', 1, 'seed: alpha staff user exists (otherwise RLS attacks silent-pass)');
+select cmp_ok((select count(*)::int from public.users where id = '00000002-0000-0000-0000-000000002003'::uuid),
+  '=', 1, 'seed: beta staff user exists (otherwise RLS attacks silent-pass)');
 
 -- ----------------------------------------------------------------
 -- Intentionally NOT covered in the generated harness:

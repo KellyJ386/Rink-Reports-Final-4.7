@@ -49,7 +49,8 @@ const covered = tables.filter((t) => !t.skip_reason)
 const skipped = tables.filter((t) => t.skip_reason)
 
 // Per covered table: rls_enabled, has_policies, cross_facility_isolation = 3 asserts.
-const planCount = covered.length * 3
+// Plus 2 preflight assertions (alpha + beta seed users exist).
+const planCount = covered.length * 3 + 2
 
 const lines = []
 
@@ -77,6 +78,23 @@ lines.push("         set_config('request.jwt.claims',")
 lines.push("           json_build_object('sub', p_user_id::text, 'role', 'authenticated')::text,")
 lines.push('           true);')
 lines.push('$$;')
+lines.push('')
+
+// Preflight: seed must have applied. If these users don't exist in public.users,
+// every cross-facility SELECT attack below would silently pass (for the WRONG
+// reason — the impersonated user has no facility_id, so RLS denies everything
+// regardless of policy correctness). Fail loudly up front instead.
+lines.push('-- ----------------------------------------------------------------')
+lines.push('-- Seed integrity preflight')
+lines.push('-- ----------------------------------------------------------------')
+lines.push(
+  `select cmp_ok((select count(*)::int from public.users where id = '${ALPHA_STAFF}'::uuid),`,
+)
+lines.push(`  '=', 1, 'seed: alpha staff user exists (otherwise RLS attacks silent-pass)');`)
+lines.push(
+  `select cmp_ok((select count(*)::int from public.users where id = '${BETA_STAFF}'::uuid),`,
+)
+lines.push(`  '=', 1, 'seed: beta staff user exists (otherwise RLS attacks silent-pass)');`)
 lines.push('')
 
 // Tables intentionally not covered — render as comment block for documentation
