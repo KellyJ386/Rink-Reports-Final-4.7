@@ -49,7 +49,7 @@ Tracked sequence. Each item has a condition that must be true before it lands.
 Deferred because: writing E2E for an actively-churning module means tests
 break and stop being trusted. Sequencing:
 
-- [ ] **4. Schema edit across versions** — land after Agent 2 form-editor UI is stable for one full build cycle.
+- [x] **4. Schema edit across versions** — **shipped via Agent 2 engine-hardening** (`tests/e2e/schema-edit-across-versions.spec.ts`). Form-editor UI stable as of commit `c8f1224` Agent 6 Phase 5.
 - [ ] **5. Offline submission** — land in the **same PR** as Agent 7's offline queue feature work (not before). The feature is the contract.
 - [ ] **6. Ice Depth session** — land after Agent 4's trends chart has a stable DOM (`recharts` selectors are fragile).
 - [ ] **7. Schedule publish** — Agent 5 is Phase-1 complete; ready to land in Agent 9 phase-2 pass.
@@ -65,11 +65,11 @@ all 32 tenant tables. Per-operation attacks (INSERT with forged `facility_id`,
 UPDATE that moves a row, DELETE cross-facility) live in per-module pgTAP
 files today and are uneven:
 
-- **Strong coverage**: `02_tenant_isolation.test.sql`, `07_facility_invites.test.sql`, `17_agent_7.test.sql`, `18_communications.test.sql`, `19_scheduling.test.sql`
+- **Strong coverage**: `02_tenant_isolation.test.sql`, `07_facility_invites.test.sql`, `17_agent_7.test.sql`, `18_communications.test.sql`, `19_scheduling.test.sql`, `21_form_engine_per_op_attacks.test.sql` (new — covers `form_schemas`, `option_list_items`, `ice_maintenance_submissions` cross-facility UPDATE + DELETE)
 - **Partial coverage**: `15_ice_depth.test.sql` (covers SELECT + INSERT; gaps on UPDATE/DELETE cross-facility)
-- **Minimal coverage**: `13_ice_maintenance_submissions.test.sql`, Agent 3's four standalone submission tables
+- **Minimal coverage**: Agent 3's four standalone submission tables (accident, incident, refrigeration, air_quality)
 
-**Plan**: write a per-module expansion brief that Agent 9 phase-2 executes, prioritising `accident_submissions` and `incident_submissions` (highest data-sensitivity — injury records).
+**Plan**: next engine-hardening-style pass targets the 4 standalone Agent 3 submission tables, prioritising `accident_submissions` and `incident_submissions` (highest data-sensitivity — injury records).
 
 ### Cross-module integration tests (from Agent 9 brief §6)
 
