@@ -14,7 +14,10 @@ export type NotificationKind =
   | 'swap.proposed'
   | 'swap.accepted_by_target'
   | 'swap.decided'
+  | 'time_off.submitted'
   | 'time_off.decided'
+  | 'time_off.withdrawn_after_approval'
+  | 'availability.cutoff_approaching'
   | 'subscription.trial_ending'
   | 'subscription.past_due'
 
@@ -37,7 +40,10 @@ export const EMAIL_CATALOG: EmailEligibility[] = [
   { kind: 'swap.proposed', isEligible: () => true },
   { kind: 'swap.accepted_by_target', isEligible: () => false }, // in-app only
   { kind: 'swap.decided', isEligible: () => true },
+  { kind: 'time_off.submitted', isEligible: () => false }, // manager-facing in-app only
   { kind: 'time_off.decided', isEligible: () => true },
+  { kind: 'time_off.withdrawn_after_approval', isEligible: () => false }, // manager-facing in-app only
+  { kind: 'availability.cutoff_approaching', isEligible: () => true },
   { kind: 'subscription.trial_ending', isEligible: () => true },
   { kind: 'subscription.past_due', isEligible: () => true },
 ]

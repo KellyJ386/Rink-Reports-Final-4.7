@@ -39,7 +39,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </NavSection>
           <NavSection title="Modules">
             <NavLink href="/admin/ice-depth">Ice Depth</NavLink>
-            {/* Communications + Scheduling land in Phase 5 */}
+            <NavLink href="/admin/communications">Communications</NavLink>
+            <NavLink href="/admin/scheduling">Scheduling</NavLink>
           </NavSection>
           <NavSection title="Account">
             <NavLink href="/admin/billing">Billing</NavLink>
