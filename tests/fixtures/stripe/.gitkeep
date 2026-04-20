@@ -1,0 +1,3 @@
+# Fixture JSON files land here; captured via `stripe trigger <event>` per README.
+# Committed separately in a follow-up PR once test mode is configured on the
+# platform admin account.

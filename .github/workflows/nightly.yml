@@ -1,0 +1,83 @@
+name: Nightly
+
+on:
+  schedule:
+    # 06:00 UTC daily — off-peak for US/EU
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  full-e2e:
+    name: Full E2E (all modules, all tags)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: supabase start
+      - run: supabase db reset --no-seed=false
+      - name: Export Supabase env
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+      - run: npm run build
+      - run: npm run test:e2e
+
+  perf-smoke:
+    name: Performance smoke (warm-run assertions, 1.5× headroom)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: supabase start
+      - run: supabase db reset --no-seed=false
+      - name: Apply realistic-volume seed
+        run: npm run seed:perf --if-present
+      - name: Export Supabase env
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+      - run: npm run build
+      - run: npm run test:perf --if-present
+
+  stripe-live:
+    name: Stripe live integration (test mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Hits real Stripe test mode to detect payload-shape drift from the
+    # fixtures used in per-PR integration tests. No secrets used for the PR
+    # pipeline — secret only exposed on the nightly job.
+    if: ${{ secrets.STRIPE_TEST_SECRET_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci
+      - env:
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: npm run test:stripe-live --if-present
+
+  npm-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm audit --audit-level=moderate
+        continue-on-error: true  # don't red-build on upstream advisories; the issue is enough

@@ -1,0 +1,36 @@
+name: Flaky test detector
+
+# SURFACES suspected flaky tests — does NOT auto-quarantine. Auto-quarantine
+# is how you end up with an always-green CI that tests nothing. A human (or
+# a follow-up PR) decides whether to move a test into `tests/quarantine/`.
+#
+# Triggers:
+#   - Weekly (Monday 07:00 UTC)
+#   - Manual (workflow_dispatch) for ad-hoc review
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    name: Scan last 7 days of runs for flaking tests
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci
+      - name: Identify flaking tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/flaky-detect.mjs --window-days 7 --min-failures 2
+      - name: Open issues for new flakes
+        if: ${{ hashFiles('flaky-report.json') != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/flaky-open-issues.mjs flaky-report.json
