@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 
+import { logScheduledJobRun } from '@/lib/scheduled-jobs/run-logger'
 import { verifyQstashRequest } from '@/lib/scheduled-jobs/verify-qstash'
-import { logger } from '@/lib/observability/logger'
 
 /**
  * Stub until Agent 5 (Scheduling) ships. When Agent 5 lands, its implementation
- * replaces this file's body. The route shape + QStash wiring stays stable.
+ * replaces the handler body. The route shape + QStash wiring stays stable.
  *
  * Logic when live:
  *   - For each facility, resolve settings.scheduling.availability_cutoff_days
@@ -18,8 +18,13 @@ export async function POST(request: Request) {
   const verified = await verifyQstashRequest(request)
   if (!verified.ok) return new NextResponse(verified.error, { status: 401 })
 
-  logger.info('job.availability_cutoff_reminder.stubbed', {
-    note: 'Agent 5 ships the implementation',
+  const outcome = await logScheduledJobRun('availability-cutoff-reminder', async (ctx) => {
+    ctx.setMetadata({ stubbed: true, note: 'Agent 5 ships the implementation' })
+    return { stubbed: true }
   })
-  return NextResponse.json({ ok: true, stubbed: true })
+
+  if (!outcome.ok) {
+    return NextResponse.json({ error: outcome.error, run_id: outcome.run_id }, { status: 500 })
+  }
+  return NextResponse.json({ ok: true, run_id: outcome.run_id, ...outcome.result })
 }
