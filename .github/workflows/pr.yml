@@ -1,0 +1,172 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs for the same ref — keeps CI minutes sensible when
+# someone force-pushes to a PR branch.
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  lint-typecheck:
+    name: Lint + typecheck + client-facility-id scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npx tsc --noEmit
+      - name: Client-side facility_id scan (blocking)
+        run: bash scripts/check-client-facility-id.sh
+
+  unit:
+    name: Unit (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  rls:
+    name: RLS regression (pgTAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - name: Regenerate RLS catalog tests (fail if stale)
+        run: |
+          node scripts/generate-rls-catalog.mjs
+          git diff --exit-code supabase/tests/20_rls_catalog.test.sql
+      - run: supabase start
+      - run: supabase db reset --no-seed=false
+      - run: supabase test db
+
+  integration:
+    name: Integration (Vitest + local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    # Non-blocking until Agent 9 phase-2 ships proper test-facility fixtures.
+    # The seed path (bcrypt'd passwords via raw SQL into auth.users) is fragile
+    # across Supabase CLI versions — documented in KNOWN_GAPS.md. Flipping
+    # this to `false` is a hard blocker for production launch.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - run: supabase start
+      - run: supabase db reset --no-seed=false
+      - name: Export Supabase local env for tests
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+      - run: npm run test:integration
+
+  e2e:
+    name: E2E critical paths (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    # Non-blocking until Agent 9 phase-2. Gating reason: E2E paths rely on
+    # (a) a working signed-in session from seeded bcrypt users (same fragility
+    # as the integration job), and (b) UI label selectors that are still
+    # churning across Agents 6/7/8. Flipping this to `false` tracks with the
+    # "E2E paths 4-11" sequence in KNOWN_GAPS.md.
+    continue-on-error: true
+    # Exclude @realtime-tagged specs from this job — they run in e2e-realtime.
+    env:
+      PLAYWRIGHT_TAG_FILTER: 'not @realtime'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: supabase start
+      - run: supabase db reset --no-seed=false
+      - name: Export Supabase local env
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+      - run: npm run build
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4 --grep-invert "@realtime"
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-shard-${{ matrix.shard }}
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-realtime:
+    name: E2E Realtime (isolated)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    # Non-blocking for the same fixture reasons as `e2e`. Additionally, no
+    # @realtime-tagged test lands until phase-2 (Communications Realtime path).
+    continue-on-error: true
+    # Realtime WS flakes shouldn't red-build the whole pipeline — isolated here.
+    # Retries (1 per test) are configured inside playwright.config.ts for
+    # @realtime-tagged tests only.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: supabase start
+      - run: supabase db reset --no-seed=false
+      - name: Export Supabase local env
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+      - run: npm run build
+      - run: npm run test:e2e -- --grep "@realtime"
+        continue-on-error: false
