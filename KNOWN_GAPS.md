@@ -96,16 +96,17 @@ Lands with Agent 7's offline queue feature pass, per the directive.
 
 ### Performance smoke (brief §7)
 
-Requires a `scripts/seed-perf.ts` that generates realistic-volume data (10k Ice Maintenance
-submissions, 52 × 8 Ice Depth readings, etc.). Warm-run assertions with 1.5×
-headroom per TESTING.md.
+Seed + warm-run pattern shipped via `agent-9/perf-seed-foundation` PR. Remaining
+scenarios land per-PR using the same template as
+`tests/integration/perf/ice-maintenance-history.perf.test.ts`. Warm-run with
+1.5× headroom per TESTING.md.
 
-- [ ] `scripts/seed-perf.ts`
-- [ ] `tests/perf/ice-maintenance-history.perf.ts` — < 1s at 10k submissions (warm)
-- [ ] `tests/perf/week-builder.perf.ts` — < 1s at 100 shifts × 20 staff (warm)
-- [ ] `tests/perf/ice-depth-trends.perf.ts` — < 1s at 52 × 8 points (warm)
-- [ ] `tests/perf/form-editor.perf.ts` — < 2s at 50-field schema (warm)
-- [ ] `tests/perf/communications-history.perf.ts` — first page < 500ms at 500 announcements (warm)
+- [x] **`scripts/seed-perf.ts`** — local-only seeder; idempotent on `idempotency_key`. 10k Ice Maintenance submissions, 52 sessions × 8 Ice Depth readings, 100 shifts, 500 announcements. Refuses to run against non-local URLs.
+- [x] **`tests/integration/perf/ice-maintenance-history.perf.test.ts`** — warm-run assertion under 1.5s, plus 200-row paged scan.
+- [ ] `tests/integration/perf/week-builder.perf.test.ts` — < 1.5s at 100 shifts × 20 staff (warm). Seed-side: shifts already there; assignments would graduate to test if needed.
+- [ ] `tests/integration/perf/ice-depth-trends.perf.test.ts` — < 1.5s at 52 × 8 points (warm).
+- [ ] `tests/integration/perf/form-editor.perf.test.ts` — < 3s at 50-field schema (warm). Seed-side: needs a 50-field draft schema; trivial extension to seed-perf.
+- [ ] `tests/integration/perf/communications-history.perf.test.ts` — first page < 750ms at 500 announcements (warm).
 
 ### Type-level regression tests
 
@@ -141,7 +142,7 @@ list is Agent 9's job; resolving items is the owning agent's.
   Owner: Agent 9 phase-2. **Must flip to blocking before production launch.**
 - [ ] **Rate limiting is single-instance in-memory.** `/api/accept-invite` uses an in-memory token bucket; a multi-instance deploy loses the guarantee. Owner: Agent 7. Acceptance: Upstash-backed or equivalent shared limiter on at least `/accept-invite`, `/api/stripe/webhook`, and any future high-value endpoint.
 - [ ] **Stripe fixture files are not yet committed.** `tests/fixtures/stripe/README.md` documents the capture process but the JSON files are absent. Without them, the phase-2 "Stripe trial → active" E2E can't land. Owner: Agent 7 (first Stripe integration pass).
-- [ ] **No realistic-volume perf seed.** `scripts/seed-perf.ts` doesn't exist. Without it, perf regressions ship silently.
+- [x] ~~**No realistic-volume perf seed.** `scripts/seed-perf.ts` doesn't exist. Without it, perf regressions ship silently.~~ **Resolved** by `agent-9/perf-seed-foundation` PR. `scripts/seed-perf.ts` ships realistic volumes (10k IM submissions, 52×8 ice depth readings, 100 shifts, 500 announcements) with a local-URL safety guard. First representative perf test (`tests/integration/perf/ice-maintenance-history.perf.test.ts`) consumes it via the warm-run pattern in TESTING.md. Remaining 4 perf scenarios are tracked under "Performance smoke (brief §7)" above and land per-PR using the same template.
 - [ ] **Cross-cutting `auth.uid()` RLS planner hint.** Agent 8's performance advisor findings noted that 5 policies on `announcements` / `announcement_reads` used `auth.uid()` directly; this was fixed for those tables in `20260425000005_announcements_perf.sql`. The same issue almost certainly exists on other modules' policies but has not been audited. Owner: Agent 9 + module owners. Acceptance: a scripted audit of all `pg_policies.qual` + `with_check` expressions flagging bare `auth.uid()` calls.
 - [x] ~~**Cross-cutting `SET search_path` on trigger functions.** 15 trigger functions (pre-existing, across all prior agents) are flagged `function_search_path_mutable` by Supabase's security advisor.~~ **Resolved** by `20260427000001_trigger_search_path_hygiene.sql` (Agent 9 `search-path-hygiene` PR). Remote advisor confirms zero remaining `function_search_path_mutable` findings post-apply.
 
