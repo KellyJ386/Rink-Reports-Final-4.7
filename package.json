@@ -25,7 +25,7 @@
     "@upstash/qstash": "^2.7.22",
     "dexie": "^4.0.10",
     "hast-util-sanitize": "^5.0.2",
-    "next": "15.1.0",
+    "next": "15.1.11",
     "posthog-js": "^1.205.0",
     "posthog-node": "^4.3.2",
     "react": "19.0.0",
