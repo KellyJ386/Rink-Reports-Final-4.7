@@ -1,3 +1,5 @@
+import type { ReactElement } from 'react'
+
 import type { SvgKey } from '@/lib/ice-depth/types'
 
 import { NHL_VIEWBOX, NhlRinkSvg } from './nhl'
@@ -6,7 +8,7 @@ import { STUDIO_VIEWBOX, StudioRinkSvg } from './studio'
 
 type SvgBundle = {
   viewBox: string
-  Component: () => JSX.Element
+  Component: () => ReactElement
   label: string
 }
 

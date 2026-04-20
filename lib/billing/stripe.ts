@@ -17,10 +17,10 @@ export function getStripe(): Stripe | null {
     cached = null
     return null
   }
-  cached = new Stripe(key, {
-    // Pin the API version so silent behavior changes don't surprise us.
-    apiVersion: '2024-12-18.acacia',
-  })
+  // Use Stripe's current default API version — the TS types pin a specific version
+  // per stripe-node release, and overriding causes type mismatches. Production
+  // pins via the Stripe dashboard.
+  cached = new Stripe(key)
   return cached
 }
 

@@ -14,6 +14,14 @@ import type {
   SvgKey,
 } from './types'
 
+// Re-export so callers can `import type { ... } from '@/lib/ice-depth/session'`
+export type {
+  CompleteSessionResult,
+  RecordReadingInput,
+  SessionStartInput,
+  SessionStartResult,
+} from './types'
+
 /**
  * Start a new session against a template. Uses the template's current version
  * (not history). Idempotent via idempotency_key: starting twice with the same key

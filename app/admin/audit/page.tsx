@@ -108,12 +108,12 @@ export default async function AdminAuditPage({
                       {(r.entity_type as string) ?? '—'}
                       {r.entity_id ? ` · ${String(r.entity_id).slice(0, 8)}` : ''}
                     </div>
-                    {r.metadata && Object.keys(r.metadata as object).length > 0 && (
+                    {!!r.metadata && Object.keys(r.metadata as object).length > 0 ? (
                       <details className="text-xs text-muted">
                         <summary>metadata</summary>
                         <pre className="mt-1">{JSON.stringify(r.metadata, null, 2)}</pre>
                       </details>
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               ))}

@@ -13,9 +13,9 @@ const withSerwist = withSerwistInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: true,
-  },
+  // typedRoutes disabled in v1 — too many admin pages construct dynamic query-string
+  // URLs (audit filters, events pagination) that don't fit the static route type.
+  // Re-enable in v2 after routes are stabilized and we add RouteImpl casts.
 }
 
 export default withSerwist(nextConfig)

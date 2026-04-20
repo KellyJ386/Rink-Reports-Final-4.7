@@ -76,7 +76,6 @@ export async function POST(request: Request) {
     logger.info('stripe.webhook.applied', {
       action: 'stripe.webhook',
       outcome: 'ok',
-      // @ts-expect-error event_type is an arbitrary field but it's informational
       event_type: event.type,
       handled: apply.handled,
     })
@@ -88,7 +87,6 @@ export async function POST(request: Request) {
     logger.warn('stripe.webhook.apply_failed', {
       action: 'stripe.webhook',
       outcome: 'error',
-      // @ts-expect-error informational
       event_type: event.type,
       error: apply.error,
     })

@@ -50,10 +50,16 @@ export default async function AdminDashboardPage() {
   const activeSurfaces = resourcesList.filter((r) => r.resource_type === 'surface' && r.is_active).length
   const activeShiftPositions = resourcesList.filter((r) => r.resource_type === 'shift_position' && r.is_active).length
 
-  const fm = (facilityModules ?? []) as Array<{ is_enabled: boolean; modules: { slug: string } }>
-  const enabledOperational = fm.filter(
-    (r) => r.is_enabled && r.modules.slug !== 'admin_control_center',
-  ).length
+  // Supabase foreign-key expansions come back as arrays even for one-to-one;
+  // modules is '!inner' so it's typed as an array we just unwrap.
+  const fm = (facilityModules ?? []) as unknown as Array<{
+    is_enabled: boolean
+    modules: { slug: string } | Array<{ slug: string }>
+  }>
+  const enabledOperational = fm.filter((r) => {
+    const mods = Array.isArray(r.modules) ? r.modules[0] : r.modules
+    return r.is_enabled && mods?.slug !== 'admin_control_center'
+  }).length
 
   // Non-admin users in this facility
   const { count: nonAdminUserCount } = await supabase

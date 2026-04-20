@@ -68,12 +68,23 @@ export type FormSchemaDefinitionDoc = {
 /**
  * Fully-resolved form schema ready for rendering. Server-side resolution has replaced
  * every `from_option_list` / `from_resource_type` reference with an inline array.
+ *
+ * This is an explicit discriminated union (not Omit<FieldSpec, 'options'> & ...)
+ * because the latter collapses the union and breaks Extract<ResolvedFieldSpec, {type}>
+ * narrowing downstream.
  */
-export type ResolvedFieldSpec = Omit<FieldSpec, 'options'> &
-  (
-    | { type: Exclude<FieldSpec['type'], 'select' | 'multiselect' | 'radio'> }
-    | { type: 'select' | 'multiselect' | 'radio'; options: InlineOption[] }
-  )
+export type ResolvedFieldSpec =
+  | (BaseField & { type: 'text' })
+  | (BaseField & { type: 'textarea'; rows?: number })
+  | (BaseField & { type: 'number'; min?: number; max?: number; step?: number; unit?: string })
+  | (BaseField & { type: 'boolean' })
+  | (BaseField & { type: 'select'; options: InlineOption[] })
+  | (BaseField & { type: 'multiselect'; options: InlineOption[] })
+  | (BaseField & { type: 'radio'; options: InlineOption[] })
+  | (BaseField & { type: 'date' })
+  | (BaseField & { type: 'time' })
+  | (BaseField & { type: 'datetime' })
+  | (BaseField & { type: 'slider'; min: number; max: number; step?: number; unit?: string })
 
 export type ResolvedSectionSpec = {
   key: string

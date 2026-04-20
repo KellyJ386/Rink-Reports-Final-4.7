@@ -74,11 +74,15 @@ export function TemplateEditor({
     setSelectedKey(null)
   }
 
-  const onSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    // Only add a point if the click landed on empty SVG space, not on an existing point
-    if ((e.target as SVGElement).tagName !== 'svg' && (e.target as SVGElement).tagName !== 'rect')
-      return
-    const rect = e.currentTarget.getBoundingClientRect()
+  const onSvgClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only add a point if the click landed on empty SVG space (the svg itself or
+    // its background rect), not on an existing point circle.
+    const target = e.target as Element
+    if (target.tagName !== 'svg' && target.tagName !== 'rect') return
+    // Find the inner SVG to use as the reference frame for percentage coords
+    const svg = target.closest('svg')
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
     addPointAt(Math.round(x * 10) / 10, Math.round(y * 10) / 10)

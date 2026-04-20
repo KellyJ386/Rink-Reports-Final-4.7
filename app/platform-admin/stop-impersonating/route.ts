@@ -9,7 +9,11 @@ export async function POST(request: Request) {
   // Close the active session in DB (RPC checks platform-admin privilege; silent
   // noop if not active). No requirePlatformAdmin at the route level because
   // clearing the cookie should work even if privilege was revoked mid-session.
-  await supabase.rpc('rpc_stop_impersonation').catch(() => undefined)
+  try {
+    await supabase.rpc('rpc_stop_impersonation')
+  } catch {
+    // Non-fatal: cookie clear still happens below.
+  }
   await clearImpersonationCookies()
   logger.info('impersonate.stopped')
 

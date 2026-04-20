@@ -6,7 +6,10 @@ import { consume } from './rate-limit'
 
 export type InviteLookupResult =
   | { state: 'valid'; invite_id: string; facility_id: string; facility_name: string; email: string; role_id: string; role_name: string }
-  | { state: 'expired' | 'accepted' | 'revoked' | 'not_found' }
+  | { state: 'expired' }
+  | { state: 'accepted' }
+  | { state: 'revoked' }
+  | { state: 'not_found' }
 
 /**
  * Look up an invite by raw token. Used to render the accept-invite page with the
@@ -36,7 +39,18 @@ export async function lookupInvite(rawToken: string, clientIp: string): Promise<
 
   const row = Array.isArray(data) ? data[0] : data
   if (!row || row.state !== 'valid') {
-    return { state: (row?.state ?? 'not_found') as InviteLookupResult['state'] }
+    const badState = (row?.state ?? 'not_found') as 'expired' | 'accepted' | 'revoked' | 'not_found'
+    // Build a discriminated union variant per state (TS can't narrow `{state: A|B}` to `{state: A}` downstream)
+    switch (badState) {
+      case 'expired':
+        return { state: 'expired' }
+      case 'accepted':
+        return { state: 'accepted' }
+      case 'revoked':
+        return { state: 'revoked' }
+      default:
+        return { state: 'not_found' }
+    }
   }
 
   return {
