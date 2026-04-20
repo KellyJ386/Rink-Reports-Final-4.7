@@ -8,6 +8,12 @@ import { markRead } from '@/lib/communications/actions'
 import { createClient } from '@/lib/supabase/server'
 
 import { AcknowledgeButton } from './AcknowledgeButton'
+import { requireModuleEnabled } from '@/lib/modules/require-enabled'
+import { fetchAnnouncementById } from '@/lib/communications/feed'
+import { markAnnouncementRead } from '@/lib/communications/read'
+
+import { hasCommunicationsAdminAccess } from '../admin-check'
+import { AnnouncementDetailClient } from './detail-client'
 
 export default async function AnnouncementDetailPage({
   params,
@@ -141,6 +147,26 @@ export default async function AnnouncementDetailPage({
           </Link>
         </div>
       )}
+  const announcement = await fetchAnnouncementById(id)
+  if (!announcement) notFound()
+
+  // Best-effort: record read-at on load. Idempotent — a second load keeps the
+  // original read_at. Errors are swallowed (UX over failing the page load).
+  await markAnnouncementRead(id)
+
+  const canAdmin = await hasCommunicationsAdminAccess()
+
+  return (
+    <main>
+      <div className="text-sm">
+        <Link href="/modules/communications" className="underline">
+          ← Back to announcements
+        </Link>
+      </div>
+      <AnnouncementDetailClient
+        announcement={announcement}
+        canAdmin={canAdmin}
+      />
     </main>
   )
 }

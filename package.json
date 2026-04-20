@@ -24,6 +24,7 @@
     "@supabase/supabase-js": "^2.47.0",
     "@upstash/qstash": "^2.7.22",
     "dexie": "^4.0.10",
+    "hast-util-sanitize": "^5.0.2",
     "next": "15.1.11",
     "posthog-js": "^1.205.0",
     "posthog-node": "^4.3.2",
@@ -33,6 +34,10 @@
     "react-markdown": "^10.1.0",
     "recharts": "^2.15.0",
     "rehype-sanitize": "^6.0.0",
+    "react-markdown": "^9.0.3",
+    "recharts": "^2.15.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.0",
     "serwist": "^9.0.11",
     "stripe": "^17.5.0",
     "zod": "^3.24.1"
