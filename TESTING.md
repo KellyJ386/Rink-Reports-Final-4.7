@@ -133,6 +133,36 @@ subscription setup, not a wider retry window.
 CI budget: PR pipeline < 10 minutes wall clock. If a job consistently pushes past
 its timeout, the fix is parallelization or skipping irrelevant work, not raising the budget.
 
+### Graduation rule (continue-on-error → blocking)
+
+Some jobs ship as `continue-on-error: true` when their underlying surface is
+not yet stable enough to gate merge (initial test fixture work, UI selectors
+churning across module agents, etc.). Graduating a job to blocking is **one
+PR per job**, not a multi-job flip.
+
+A job graduates when it has:
+
+- Passed **5 consecutive PR runs** with no manual re-runs
+- No documented flake history (no `flaky-detect` issue opened against any of
+  its tests, no mention of re-runs in the relevant PR discussions)
+- Its owning surface has not been churning in the same 5-run window (no
+  feature PRs landing against the tested code without corresponding test
+  updates)
+
+**Promotion order (lowest flake risk first):**
+
+1. Vitest unit (`unit`)
+2. Vitest integration (`integration`)
+3. pgTAP RLS regression expansion rows
+4. Playwright E2E critical paths (`e2e`)
+5. Playwright E2E Realtime (`e2e-realtime`)
+
+Graduating in this order means we see signal from the easy ones — flake
+rate, failure modes, CI-time cost — before we commit to gating merge on the
+harder ones. Each graduation PR's title is
+`ci: graduate <job-name> to blocking` and its body documents the 5 runs
+that justified the promotion.
+
 ## Flaky quarantine
 
 See `.github/workflows/flaky-detect.yml`. A weekly scan identifies tests that
