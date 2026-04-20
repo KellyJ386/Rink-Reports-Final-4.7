@@ -104,6 +104,31 @@ export function renderNotificationEmail(args: RenderArgs): { subject: string; ht
           cta(appUrl, '/modules/scheduling/manage/swaps', 'Review'),
         ),
       }
+    case 'time_off.submitted':
+      // Manager-facing; not currently email-eligible but template kept for completeness.
+      return {
+        subject: `New time-off request from ${String(payload.requester_name ?? 'staff')}`,
+        html: wrap(
+          `A staff member submitted a time-off request.`,
+          cta(appUrl, '/modules/scheduling/manage/time-off', 'Review'),
+        ),
+      }
+    case 'time_off.withdrawn_after_approval':
+      return {
+        subject: `Time-off withdrawn after approval`,
+        html: wrap(
+          `A previously-approved time-off request was withdrawn by the requester. Your published schedule was not changed.`,
+          cta(appUrl, '/modules/scheduling/manage/time-off', 'Review'),
+        ),
+      }
+    case 'availability.cutoff_approaching':
+      return {
+        subject: `Availability cutoff approaching for week of ${String(payload.week_start_date ?? '')}`,
+        html: wrap(
+          `The availability submission deadline is coming up. If you haven't submitted availability for this week, your manager will schedule without it.`,
+          cta(appUrl, '/modules/scheduling/availability', 'Submit availability'),
+        ),
+      }
     default: {
       const _exhaustive: never = kind
       throw new Error(`No email template for kind: ${String(_exhaustive)}`)
