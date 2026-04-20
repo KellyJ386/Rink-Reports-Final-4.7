@@ -29,7 +29,12 @@ export function buildZodFromSchema(
 
   for (const section of sections) {
     for (const field of section.fields) {
-      shape[field.key] = fieldToZod(field)
+      // When a field has show_if, we ALWAYS build its base Zod type as
+      // optional. The superRefine below enforces required-when-visible so
+      // a hidden required field doesn't fail at base-parse time before the
+      // visibility check runs.
+      const effectiveField = field.show_if ? { ...field, required: false } : field
+      shape[field.key] = fieldToZod(effectiveField)
     }
   }
 

@@ -5,6 +5,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      // `server-only` is a Next.js marker package that throws on browser
+      // imports. In Node-context Vitest it can't be resolved at all; stub it.
+      'server-only': path.resolve(__dirname, 'tests/helpers/server-only-stub.ts'),
     },
   },
   test: {
