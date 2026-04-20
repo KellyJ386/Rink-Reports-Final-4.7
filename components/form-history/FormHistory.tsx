@@ -62,7 +62,7 @@ export async function FormHistory({ moduleSlug, formType, baseUrl, columns = DEF
         </tr>
       </thead>
       <tbody>
-        {data.map((row: Record<string, unknown>) => (
+        {(data as unknown as Record<string, unknown>[]).map((row) => (
           <tr key={row.id as string} className="border-b border-hairline">
             {columns.map((col) => (
               <td key={col.key} className="py-2 pr-3 align-top">

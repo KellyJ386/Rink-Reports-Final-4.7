@@ -1,5 +1,3 @@
-import { redirect } from 'next/navigation'
-
 import { SchemaRenderErrorBanner } from '@/components/form-errors/SchemaRenderErrorBanner'
 import { loadPublishedFormSchema } from '@/lib/forms/load-form-schema'
 import { requireModuleEnabled } from '@/lib/modules/require-enabled'
@@ -41,8 +39,4 @@ export default async function NewCircleCheckPage() {
       </div>
     </main>
   )
-}
-
-export async function redirectToHistoryAfterSubmit(_id: string): Promise<never> {
-  redirect('/modules/ice-maintenance/circle-check')
 }
