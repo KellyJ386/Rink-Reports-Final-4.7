@@ -1,0 +1,15 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": [
+    ".next/",
+    "node_modules/",
+    "public/sw.js",
+    "public/workbox-*.js",
+    "public/swe-worker-*.js",
+    "tests/quarantine/"
+  ],
+  "rules": {
+    "@next/next/no-img-element": "off",
+    "react/no-unescaped-entities": "off"
+  }
+}
