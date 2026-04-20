@@ -48,7 +48,10 @@ create policy scheduled_job_runs_select on public.scheduled_job_runs
 
 -- Prevent tampering: no UPDATE of started_at / job_slug after insert.
 create or replace function public.tg_scheduled_job_runs_immutable_fields()
-returns trigger language plpgsql as $$
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
 begin
   if new.job_slug   is distinct from old.job_slug
      or new.started_at is distinct from old.started_at

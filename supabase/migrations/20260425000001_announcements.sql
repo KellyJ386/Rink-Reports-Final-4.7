@@ -11,6 +11,17 @@
 --   * Read/ack upsert: ON CONFLICT preserves original read_at as historical truth
 --   * Partial index on announcement_reads(acknowledged_at, read_at) accelerates
 --     the Agent 7 ack-reminder job
+--
+-- Ordering: both tables are created first (announcement_reads → announcements via
+-- FK is fine because announcements is created first), THEN all RLS policies are
+-- attached. Attaching policies at creation time would fail because the
+-- announcements_update policy references announcement_reads in a NOT EXISTS
+-- subquery — Postgres validates the policy expression at CREATE POLICY time,
+-- which needs the referenced table to exist.
+
+-- ============================================================================
+-- Tables
+-- ============================================================================
 
 create table if not exists public.announcements (
   id                       uuid primary key default gen_random_uuid(),
@@ -61,6 +72,30 @@ create unique index if not exists announcements_idempotency_key
   where idempotency_key is not null;
 
 alter table public.announcements enable row level security;
+
+create table if not exists public.announcement_reads (
+  id                uuid primary key default gen_random_uuid(),
+  announcement_id   uuid not null references public.announcements(id) on delete cascade,
+  user_id           uuid not null references public.users(id) on delete cascade,
+  read_at           timestamptz not null default now(),
+  acknowledged_at   timestamptz,
+
+  constraint announcement_reads_unique unique (announcement_id, user_id)
+);
+
+create index if not exists announcement_reads_user_read_idx
+  on public.announcement_reads (user_id, read_at desc);
+
+-- Drives Agent 7's ack-reminder job: find rows that have been read but not acked.
+create index if not exists announcement_reads_pending_ack_idx
+  on public.announcement_reads (acknowledged_at, read_at)
+  where acknowledged_at is null;
+
+alter table public.announcement_reads enable row level security;
+
+-- ============================================================================
+-- Policies — announcements
+-- ============================================================================
 
 -- Authors + admins + target audience (with Communications read access) see announcements
 drop policy if exists announcements_select on public.announcements;
@@ -124,28 +159,8 @@ comment on table public.announcements is
   'Facility-wide + role-targeted announcements. Content edits blocked after first read; retire via rpc_archive_announcement.';
 
 -- ============================================================================
--- announcement_reads
+-- Policies — announcement_reads
 -- ============================================================================
-
-create table if not exists public.announcement_reads (
-  id                uuid primary key default gen_random_uuid(),
-  announcement_id   uuid not null references public.announcements(id) on delete cascade,
-  user_id           uuid not null references public.users(id) on delete cascade,
-  read_at           timestamptz not null default now(),
-  acknowledged_at   timestamptz,
-
-  constraint announcement_reads_unique unique (announcement_id, user_id)
-);
-
-create index if not exists announcement_reads_user_read_idx
-  on public.announcement_reads (user_id, read_at desc);
-
--- Drives Agent 7's ack-reminder job: find rows that have been read but not acked.
-create index if not exists announcement_reads_pending_ack_idx
-  on public.announcement_reads (acknowledged_at, read_at)
-  where acknowledged_at is null;
-
-alter table public.announcement_reads enable row level security;
 
 -- Users see their own. Authors + admins see reads on announcements they authored / manage.
 drop policy if exists announcement_reads_select on public.announcement_reads;
