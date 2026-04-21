@@ -19,33 +19,10 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseUrl.startsWith('http') || !supabaseAnonKey) {
-  // If env vars are missing or invalid (e.g. in CI before Supabase starts),
-  // skip session refresh gracefully rather than crashing the server.
+  // If env vars are missing or invalid (e.g. misconfigured CI or preview deploy),
+  // skip auth middleware rather than crashing the server with an
+  // "Invalid supabaseUrl" error.
   if (!supabaseUrl?.startsWith('http') || !supabaseAnonKey) {
-    return response
-  }
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(
-          cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>,
-        ) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          )
-        },
-  // If env vars are missing (e.g. misconfigured CI or preview deploy), skip auth
-  // middleware rather than crashing the server with an "Invalid supabaseUrl" error.
-  if (!supabaseUrl || !supabaseAnonKey) {
     return response
   }
 
