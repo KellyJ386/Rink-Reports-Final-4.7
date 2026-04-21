@@ -17,6 +17,10 @@
 -- the attacker's OWN resources (visible via their facility's RLS scope) while
 -- setting facility_id to the victim facility.  This ensures the INSERT always
 -- has a row to attempt, letting the RLS WITH CHECK fire and throw 42501.
+-- Highest data-sensitivity in the product: accident + incident carry injury
+-- records. A silent cross-facility leak here is lawsuit material. This is
+-- the gap my own Agent 2 engine-hardening PR flagged as the "next
+-- engine-hardening-style pass."
 
 begin;
 select plan(20);
@@ -63,6 +67,7 @@ values (
 );
 
 -- refrigeration_submissions (service role sees all facility_resources)
+-- refrigeration_submissions
 insert into public.refrigeration_submissions
   (facility_id, submitted_by, form_schema_version,
    reading_taken_at, compressor_resource_id, custom_fields, idempotency_key)
@@ -80,6 +85,7 @@ where fr.facility_id = '00000001-0000-0000-0000-000000000001'::uuid
 limit 1;
 
 -- air_quality_submissions (service role sees all facility_resources)
+-- air_quality_submissions
 insert into public.air_quality_submissions
   (facility_id, submitted_by, form_schema_version,
    reading_taken_at, device_resource_id, location_of_reading, custom_fields)
@@ -102,6 +108,7 @@ limit 1;
 select _test_as('00000002-0000-0000-0000-000000002001'::uuid);  -- beta admin
 
 -- Attack 1: INSERT with forged alpha facility_id (VALUES — always has a row)
+-- Attack 1: INSERT with forged alpha facility_id
 select throws_ok(
   $$insert into public.accident_submissions
       (facility_id, submitted_by, form_schema_version,
@@ -212,6 +219,8 @@ select throws_ok(
     from public.facility_resources fr
     where fr.resource_type = 'compressor'
     limit 1$$,
+    where fr.facility_id = '00000001-0000-0000-0000-000000000001'::uuid
+      and fr.resource_type = 'compressor' limit 1$$,
   null,
   'refrigeration_submissions: beta cannot forge alpha facility_id'
 );
@@ -264,6 +273,8 @@ select throws_ok(
     from public.facility_resources fr
     where fr.resource_type = 'air_quality_device'
     limit 1$$,
+    where fr.facility_id = '00000001-0000-0000-0000-000000000001'::uuid
+      and fr.resource_type = 'air_quality_device' limit 1$$,
   null,
   'air_quality_submissions: beta cannot forge alpha facility_id'
 );
