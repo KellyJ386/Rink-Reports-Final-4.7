@@ -3,7 +3,7 @@
 -- var + audit_log auto-populate, billing_events append-only behavior.
 
 begin;
-select plan(17);
+select plan(19);
 
 create or replace function _test_as(p_user_id uuid) returns void
 language sql as $$

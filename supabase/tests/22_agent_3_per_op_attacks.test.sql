@@ -13,6 +13,10 @@
 --      post-hoc assertion that the alpha row is unchanged.
 --   5. Per table: cross-facility DELETE → no throw + post-hoc exists.
 --
+-- Note on refrigeration/air_quality forge attacks: the INSERT subquery uses
+-- the attacker's OWN resources (visible via their facility's RLS scope) while
+-- setting facility_id to the victim facility.  This ensures the INSERT always
+-- has a row to attempt, letting the RLS WITH CHECK fire and throw 42501.
 -- Highest data-sensitivity in the product: accident + incident carry injury
 -- records. A silent cross-facility leak here is lawsuit material. This is
 -- the gap my own Agent 2 engine-hardening PR flagged as the "next
@@ -62,6 +66,7 @@ values (
   '{"marker":"pristine"}'::jsonb
 );
 
+-- refrigeration_submissions (service role sees all facility_resources)
 -- refrigeration_submissions
 insert into public.refrigeration_submissions
   (facility_id, submitted_by, form_schema_version,
@@ -79,6 +84,7 @@ where fr.facility_id = '00000001-0000-0000-0000-000000000001'::uuid
   and fr.resource_type = 'compressor'
 limit 1;
 
+-- air_quality_submissions (service role sees all facility_resources)
 -- air_quality_submissions
 insert into public.air_quality_submissions
   (facility_id, submitted_by, form_schema_version,
@@ -101,6 +107,7 @@ limit 1;
 -- ============================================================================
 select _test_as('00000002-0000-0000-0000-000000002001'::uuid);  -- beta admin
 
+-- Attack 1: INSERT with forged alpha facility_id (VALUES — always has a row)
 -- Attack 1: INSERT with forged alpha facility_id
 select throws_ok(
   $$insert into public.accident_submissions
@@ -196,6 +203,9 @@ select cmp_ok(
 -- ============================================================================
 -- refrigeration_submissions
 -- ============================================================================
+-- Forge attack: use beta's OWN compressor (visible via beta's RLS scope) but
+-- set facility_id = alpha.  The INSERT always has a row to attempt; RLS WITH
+-- CHECK fires because facility_id ≠ current_facility_id() and throws 42501.
 select _test_as('00000002-0000-0000-0000-000000002001'::uuid);
 
 select throws_ok(
@@ -207,6 +217,8 @@ select throws_ok(
       '00000002-0000-0000-0000-000000002001',
       1, now(), fr.id, '{}'::jsonb
     from public.facility_resources fr
+    where fr.resource_type = 'compressor'
+    limit 1$$,
     where fr.facility_id = '00000001-0000-0000-0000-000000000001'::uuid
       and fr.resource_type = 'compressor' limit 1$$,
   null,
@@ -246,6 +258,8 @@ select cmp_ok(
 -- ============================================================================
 -- air_quality_submissions
 -- ============================================================================
+-- Forge attack: use beta's OWN air_quality_device (visible via beta's RLS
+-- scope) but set facility_id = alpha.
 select _test_as('00000002-0000-0000-0000-000000002001'::uuid);
 
 select throws_ok(
@@ -257,6 +271,8 @@ select throws_ok(
       '00000002-0000-0000-0000-000000002001',
       1, now(), fr.id, 'hostile', '{}'::jsonb
     from public.facility_resources fr
+    where fr.resource_type = 'air_quality_device'
+    limit 1$$,
     where fr.facility_id = '00000001-0000-0000-0000-000000000001'::uuid
       and fr.resource_type = 'air_quality_device' limit 1$$,
   null,

@@ -4,7 +4,7 @@
 -- availability computation, scheduled job run logging.
 
 begin;
-select plan(22);
+select plan(23);
 
 create or replace function _test_as(p_user_id uuid) returns void
 language sql as $$
@@ -220,14 +220,25 @@ select throws_ok(
 -- ----------------------------------------------------------------
 -- Shift-position facility mismatch blocked
 -- ----------------------------------------------------------------
--- Beta admin tries to assign an ALPHA facility resource as position
+-- Seed a deterministic alpha shift_position so we have a known UUID to
+-- reference cross-facility.  Service role bypasses RLS for the insert.
+reset role;
+insert into public.facility_resources (id, facility_id, resource_type, name)
+values ('00000001-f000-0000-0000-000000000001'::uuid,
+        '00000001-0000-0000-0000-000000000001'::uuid,
+        'shift_position', 'Alpha Pos (cross-facility test)')
+on conflict (id) do nothing;
+
+-- Beta admin tries to insert a shift referencing the alpha position_resource_id.
+-- The trigger blocks it: the resource is invisible to beta (not-found via RLS),
+-- causing tg_shifts_position_resource_check to raise an exception.
+select _test_as('00000002-0000-0000-0000-000000002001'::uuid);
 select throws_ok(
   $$insert into public.shifts (schedule_id, position_resource_id, starts_at, ends_at)
-    select s.id, fr.id, '2026-05-10 06:00:00+00', '2026-05-10 10:00:00+00'
-    from public.schedules s, public.facility_resources fr
+    select s.id, '00000001-f000-0000-0000-000000000001'::uuid,
+           '2026-05-10 06:00:00+00', '2026-05-10 10:00:00+00'
+    from public.schedules s
     where s.week_start_date = '2026-05-10'
-      and fr.resource_type = 'shift_position'
-      and fr.facility_id <> public.current_facility_id()
     limit 1$$,
   null,
   'shift cannot reference another facility position'
