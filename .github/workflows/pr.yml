@@ -93,6 +93,15 @@ jobs:
         run: |
           supabase status --output env > /tmp/supabase.env
           cat /tmp/supabase.env
+          SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_ANON=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_SRK=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          test -n "$SUPABASE_URL" || { echo "ERROR: SUPABASE_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ANON" || { echo "ERROR: SUPABASE_ANON is empty"; exit 1; }
+          test -n "$SUPABASE_SRK" || { echo "ERROR: SUPABASE_SRK is empty"; exit 1; }
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SRK" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           echo "SUPABASE_SERVICE_ROLE_KEY=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
@@ -172,6 +181,15 @@ jobs:
         run: |
           supabase status --output env > /tmp/supabase.env
           cat /tmp/supabase.env
+          SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_ANON=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_SRK=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          test -n "$SUPABASE_URL" || { echo "ERROR: SUPABASE_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ANON" || { echo "ERROR: SUPABASE_ANON is empty"; exit 1; }
+          test -n "$SUPABASE_SRK" || { echo "ERROR: SUPABASE_SRK is empty"; exit 1; }
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SRK" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           echo "SUPABASE_SERVICE_ROLE_KEY=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
@@ -245,6 +263,12 @@ jobs:
         run: |
           supabase status --output env > /tmp/supabase.env
           cat /tmp/supabase.env
+          SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_ANON=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          test -n "$SUPABASE_URL" || { echo "ERROR: SUPABASE_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ANON" || { echo "ERROR: SUPABASE_ANON is empty"; exit 1; }
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
