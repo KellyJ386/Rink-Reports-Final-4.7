@@ -89,10 +89,20 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env for tests
+        shell: bash
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
-          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL
+          source "$GITHUB_ENV" 2>/dev/null || true
+          node -e "
+            const u = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            if (!/^https?:\/\//.test(u)) {
+              console.error('NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL:', JSON.stringify(u));
+              process.exit(1);
+            }
+            console.log('NEXT_PUBLIC_SUPABASE_URL OK:', u);
+          "
       - run: npm run test:integration
 
   e2e:
@@ -126,10 +136,20 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
+        shell: bash
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
-          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL
+          source "$GITHUB_ENV" 2>/dev/null || true
+          node -e "
+            const u = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            if (!/^https?:\/\//.test(u)) {
+              console.error('NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL:', JSON.stringify(u));
+              process.exit(1);
+            }
+            console.log('NEXT_PUBLIC_SUPABASE_URL OK:', u);
+          "
       - run: npm run build
       - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4 --grep-invert "@realtime"
       - name: Upload Playwright report
@@ -164,9 +184,20 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
+        shell: bash
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL
+          source "$GITHUB_ENV" 2>/dev/null || true
+          node -e "
+            const u = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            if (!/^https?:\/\//.test(u)) {
+              console.error('NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL:', JSON.stringify(u));
+              process.exit(1);
+            }
+            console.log('NEXT_PUBLIC_SUPABASE_URL OK:', u);
+          "
       - run: npm run build
       - run: npm run test:e2e -- --grep "@realtime"
         continue-on-error: false
