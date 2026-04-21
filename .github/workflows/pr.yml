@@ -2,9 +2,9 @@ name: PR checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, main1]
   push:
-    branches: [main]
+    branches: [main, main1]
 
 # Cancel in-progress runs for the same ref — keeps CI minutes sensible when
 # someone force-pushes to a PR branch.
@@ -89,6 +89,7 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env for tests
+        shell: bash
         run: |
           supabase status --output env > /tmp/supabase.env
           cat /tmp/supabase.env
@@ -98,6 +99,42 @@ jobs:
           test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
           test -n "$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"; exit 1; }
           test -n "$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: SUPABASE_SERVICE_ROLE_KEY is empty"; exit 1; }
+          set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: read the exported value directly from $GITHUB_ENV
+          # (vars appended to $GITHUB_ENV are only available in subsequent steps,
+          # so we parse the file here rather than relying on the current env).
+          supabase_url="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' "$GITHUB_ENV" | head -1 | cut -d= -f2-)"
+          if [[ ! "$supabase_url" =~ ^https?:// ]]; then
+            echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL: '$supabase_url'"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL OK: $supabase_url"
+          ENV_OUT="$(supabase status --output env)"
+
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E '^(ANON_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY)=' | head -n1 | cut -d= -f2-)"
+          SERVICE_ROLE_KEY="$(echo "$ENV_OUT" | grep -E '^SERVICE_ROLE_KEY=' | head -n1 | cut -d= -f2-)"
+
+          if [[ -z "${SUPABASE_URL}" ]]; then
+            echo "Supabase URL is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+          if [[ -z "${ANON_KEY}" ]]; then
+            echo "Supabase ANON key is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+          if [[ -z "${SERVICE_ROLE_KEY}" ]]; then
+            echo "Supabase SERVICE_ROLE key is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
       - run: npm run test:integration
 
   e2e:
@@ -131,6 +168,7 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
+        shell: bash
         run: |
           supabase status --output env > /tmp/supabase.env
           cat /tmp/supabase.env
@@ -140,6 +178,35 @@ jobs:
           test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
           test -n "$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"; exit 1; }
           test -n "$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: SUPABASE_SERVICE_ROLE_KEY is empty"; exit 1; }
+          set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: read the exported value directly from $GITHUB_ENV
+          supabase_url="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' "$GITHUB_ENV" | head -1 | cut -d= -f2-)"
+          if [[ ! "$supabase_url" =~ ^https?:// ]]; then
+            echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL: '$supabase_url'"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL OK: $supabase_url"
+          ENV_OUT="$(supabase status --output env)"
+
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E '^(ANON_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY)=' | head -n1 | cut -d= -f2-)"
+          SERVICE_ROLE_KEY="$(echo "$ENV_OUT" | grep -E '^(SERVICE_ROLE_KEY)=' | head -n1 | cut -d= -f2-)"
+
+          if [[ -z "${SUPABASE_URL}" ]]; then
+            echo "Supabase URL is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+          if [[ -z "${ANON_KEY}" ]]; then
+            echo "Supabase ANON key is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
       - run: npm run build
       - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4 --grep-invert "@realtime"
       - name: Upload Playwright report
@@ -174,6 +241,7 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
+        shell: bash
         run: |
           supabase status --output env > /tmp/supabase.env
           cat /tmp/supabase.env
@@ -181,6 +249,33 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
           test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
           test -n "$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"; exit 1; }
+          set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: read the exported value directly from $GITHUB_ENV
+          supabase_url="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' "$GITHUB_ENV" | head -1 | cut -d= -f2-)"
+          if [[ ! "$supabase_url" =~ ^https?:// ]]; then
+            echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL: '$supabase_url'"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL OK: $supabase_url"
+          ENV_OUT="$(supabase status --output env)"
+
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E '^(ANON_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY)=' | head -n1 | cut -d= -f2-)"
+
+          if [[ -z "${SUPABASE_URL}" ]]; then
+            echo "Supabase URL is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+          if [[ -z "${ANON_KEY}" ]]; then
+            echo "Supabase ANON key is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
       - run: npm run build
       - run: npm run test:e2e -- --grep "@realtime"
         continue-on-error: false

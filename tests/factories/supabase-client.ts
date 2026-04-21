@@ -10,24 +10,28 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-function required(name: string): string {
-  const v = process.env[name]
-  if (!v) throw new Error(`Missing env var: ${name}. Did you export Supabase locals?`)
-  return v
+function requiredAny(...names: string[]): string {
+  for (const name of names) {
+    const v = process.env[name]
+    if (v) return v
+  }
+  throw new Error(
+    `Missing env var: tried ${names.join(', ')}. Did you export Supabase locals?`,
+  )
 }
 
 export function anonClient(): SupabaseClient {
   return createClient(
-    required('NEXT_PUBLIC_SUPABASE_URL'),
-    required('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+    requiredAny('NEXT_PUBLIC_SUPABASE_URL', 'API_URL'),
+    requiredAny('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'ANON_KEY'),
     { auth: { persistSession: false } },
   )
 }
 
 export function serviceClient(): SupabaseClient {
   return createClient(
-    required('NEXT_PUBLIC_SUPABASE_URL'),
-    required('SUPABASE_SERVICE_ROLE_KEY'),
+    requiredAny('NEXT_PUBLIC_SUPABASE_URL', 'API_URL'),
+    requiredAny('SUPABASE_SERVICE_ROLE_KEY', 'SERVICE_ROLE_KEY'),
     { auth: { persistSession: false } },
   )
 }
