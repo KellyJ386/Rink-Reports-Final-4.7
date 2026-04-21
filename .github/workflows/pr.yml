@@ -90,9 +90,17 @@ jobs:
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env for tests
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
-          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          supabase status --output env > /tmp/supabase.env
+          cat /tmp/supabase.env
+          SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_ANON=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_SRK=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          test -n "$SUPABASE_URL" || { echo "ERROR: SUPABASE_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ANON" || { echo "ERROR: SUPABASE_ANON is empty"; exit 1; }
+          test -n "$SUPABASE_SRK" || { echo "ERROR: SUPABASE_SRK is empty"; exit 1; }
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SRK" >> $GITHUB_ENV
       - run: npm run test:integration
 
   e2e:
@@ -127,9 +135,17 @@ jobs:
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
-          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          supabase status --output env > /tmp/supabase.env
+          cat /tmp/supabase.env
+          SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_ANON=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_SRK=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          test -n "$SUPABASE_URL" || { echo "ERROR: SUPABASE_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ANON" || { echo "ERROR: SUPABASE_ANON is empty"; exit 1; }
+          test -n "$SUPABASE_SRK" || { echo "ERROR: SUPABASE_SRK is empty"; exit 1; }
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SRK" >> $GITHUB_ENV
       - run: npm run build
       - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4 --grep-invert "@realtime"
       - name: Upload Playwright report
@@ -165,8 +181,14 @@ jobs:
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          supabase status --output env > /tmp/supabase.env
+          cat /tmp/supabase.env
+          SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          SUPABASE_ANON=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2- | tr -d '"')
+          test -n "$SUPABASE_URL" || { echo "ERROR: SUPABASE_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ANON" || { echo "ERROR: SUPABASE_ANON is empty"; exit 1; }
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON" >> $GITHUB_ENV
       - run: npm run build
       - run: npm run test:e2e -- --grep "@realtime"
         continue-on-error: false
