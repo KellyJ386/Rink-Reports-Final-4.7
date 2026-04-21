@@ -92,6 +92,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: read the exported value directly from $GITHUB_ENV
+          # (vars appended to $GITHUB_ENV are only available in subsequent steps,
+          # so we parse the file here rather than relying on the current env).
+          supabase_url="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' "$GITHUB_ENV" | head -1 | cut -d= -f2-)"
+          if [[ ! "$supabase_url" =~ ^https?:// ]]; then
+            echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL: '$supabase_url'"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL OK: $supabase_url"
           ENV_OUT="$(supabase status --output env)"
 
           SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
@@ -153,6 +163,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: read the exported value directly from $GITHUB_ENV
+          supabase_url="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' "$GITHUB_ENV" | head -1 | cut -d= -f2-)"
+          if [[ ! "$supabase_url" =~ ^https?:// ]]; then
+            echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL: '$supabase_url'"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL OK: $supabase_url"
           ENV_OUT="$(supabase status --output env)"
 
           SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
@@ -210,6 +228,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          supabase status --output env >> "$GITHUB_ENV"
+          # Sanity check: read the exported value directly from $GITHUB_ENV
+          supabase_url="$(grep '^NEXT_PUBLIC_SUPABASE_URL=' "$GITHUB_ENV" | head -1 | cut -d= -f2-)"
+          if [[ ! "$supabase_url" =~ ^https?:// ]]; then
+            echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is missing or not a valid URL: '$supabase_url'"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL OK: $supabase_url"
           ENV_OUT="$(supabase status --output env)"
 
           SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
