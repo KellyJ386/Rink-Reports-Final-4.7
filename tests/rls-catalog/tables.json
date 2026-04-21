@@ -17,7 +17,7 @@
     { "name": "facility_invites", "facility_column": "facility_id" },
     { "name": "facility_resources", "facility_column": "facility_id" },
     { "name": "form_schemas", "facility_column": "facility_id" },
-    { "name": "form_schema_history", "parent_table": "form_schemas", "parent_fk_column": "form_schema_id" },
+    { "name": "form_schema_history", "facility_column": "facility_id" },
     { "name": "option_lists", "facility_column": "facility_id" },
     { "name": "option_list_items", "parent_table": "option_lists", "parent_fk_column": "option_list_id" },
     { "name": "ice_maintenance_submissions", "facility_column": "facility_id" },
