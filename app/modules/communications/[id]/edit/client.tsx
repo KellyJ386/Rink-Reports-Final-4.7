@@ -6,7 +6,7 @@ import { useState, useId } from 'react'
 import { MarkdownBody } from '@/components/communications/MarkdownBody'
 import type { Announcement, AnnouncementPriority, TargetAudience } from '@/lib/communications/types'
 
-import { editAnnouncement, archiveAnnouncement } from './actions'
+import { editAnnouncement, archiveAnnouncement } from '@/lib/communications/actions'
 
 type Role = { id: string; name: string }
 
