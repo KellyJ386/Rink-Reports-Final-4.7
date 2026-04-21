@@ -22,6 +22,8 @@ export async function middleware(request: NextRequest) {
   // If env vars are missing or invalid (e.g. misconfigured CI or preview deploy),
   // skip auth middleware rather than crashing the server with an
   // "Invalid supabaseUrl" error.
+  // If env vars are missing or invalid (e.g. in CI before Supabase starts),
+  // skip session refresh gracefully rather than crashing the server.
   if (!supabaseUrl?.startsWith('http') || !supabaseAnonKey) {
     return response
   }
