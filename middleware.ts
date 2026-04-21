@@ -19,6 +19,9 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  // If env vars are missing or invalid (e.g. misconfigured CI or preview deploy),
+  // skip auth middleware rather than crashing the server with an
+  // "Invalid supabaseUrl" error.
   // If env vars are missing or invalid (e.g. in CI before Supabase starts),
   // skip session refresh gracefully rather than crashing the server.
   if (!supabaseUrl?.startsWith('http') || !supabaseAnonKey) {
