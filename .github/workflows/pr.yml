@@ -91,6 +91,14 @@ jobs:
       - name: Export Supabase local env for tests
         shell: bash
         run: |
+          supabase status --output env > /tmp/supabase.env
+          cat /tmp/supabase.env
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
+          test -n "$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"; exit 1; }
+          test -n "$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: SUPABASE_SERVICE_ROLE_KEY is empty"; exit 1; }
           set -euo pipefail
           supabase status --output env >> "$GITHUB_ENV"
           # Sanity check: read the exported value directly from $GITHUB_ENV
@@ -162,6 +170,14 @@ jobs:
       - name: Export Supabase local env
         shell: bash
         run: |
+          supabase status --output env > /tmp/supabase.env
+          cat /tmp/supabase.env
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
+          test -n "$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"; exit 1; }
+          test -n "$(grep -E '^SERVICE_ROLE_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: SUPABASE_SERVICE_ROLE_KEY is empty"; exit 1; }
           set -euo pipefail
           supabase status --output env >> "$GITHUB_ENV"
           # Sanity check: read the exported value directly from $GITHUB_ENV
@@ -227,6 +243,12 @@ jobs:
       - name: Export Supabase local env
         shell: bash
         run: |
+          supabase status --output env > /tmp/supabase.env
+          cat /tmp/supabase.env
+          echo "NEXT_PUBLIC_SUPABASE_URL=$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" >> $GITHUB_ENV
+          test -n "$(grep -E '^API_URL=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"; exit 1; }
+          test -n "$(grep -E '^ANON_KEY=' /tmp/supabase.env | cut -d= -f2-)" || { echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is empty"; exit 1; }
           set -euo pipefail
           supabase status --output env >> "$GITHUB_ENV"
           # Sanity check: read the exported value directly from $GITHUB_ENV
