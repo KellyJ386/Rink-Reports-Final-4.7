@@ -139,7 +139,16 @@ list is Agent 9's job; resolving items is the owning agent's.
   - Deterministic UI label selectors — currently E2E tests bind to `getByLabel(/email/i)` etc., which are stable enough for today's shell but would break if any module agent renames a form field
   - Seeded password-grant sign-in verified against the same CLI version CI uses
   Owner: Agent 9 phase-2. **Must flip to blocking before production launch.**
-- [ ] **Rate limiting is single-instance in-memory.** `/api/accept-invite` uses an in-memory token bucket; a multi-instance deploy loses the guarantee. Owner: Agent 7. Acceptance: Upstash-backed or equivalent shared limiter on at least `/accept-invite`, `/api/stripe/webhook`, and any future high-value endpoint.
+- [ ] **Rate limiting is single-instance in-memory.** `/api/accept-invite` uses an in-memory token bucket; a multi-instance deploy loses the guarantee.
+  - **Decision locked (2026-04-20):** **Upstash Redis** + `@upstash/ratelimit`. Rationale:
+    - Smallest surface — two env vars (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) + one package (~20 lines of glue at the limited-endpoint level).
+    - **Single vendor relationship** — `@upstash/qstash` is already in our dependency list for scheduled jobs, so this adds no new provider.
+    - Free tier (10k requests/day) is 2–3× the combined projected volume of `/accept-invite` + `/api/stripe/webhook` for the first 1,000 facilities.
+    - Reversible — swapping to a different KV provider (Redis Cloud, Vercel KV, a pg_rate_limit function) is a 5-line change at the `Ratelimit.fixedWindow(...)` call site. Low lock-in cost.
+    - Rejected alternatives:
+      - **`pg_rate_limit` (DB function):** ties rate limiting to DB availability — if Supabase hiccups, the limiter fails open. Also adds a DB round-trip per limited request.
+      - **Vercel Edge KV:** only works on Vercel; locks us deeper into the platform and leaves rate limiting broken if we ever run on a non-Vercel host.
+  - **Acceptance (unchanged):** Upstash-backed or equivalent shared limiter on at least `/accept-invite`, `/api/stripe/webhook`, and any future high-value endpoint. Owner: Agent 7 in the next Agent 7 feature pass.
 - [ ] **Stripe fixture files are not yet committed.** `tests/fixtures/stripe/README.md` documents the capture process but the JSON files are absent. Without them, the phase-2 "Stripe trial → active" E2E can't land. Owner: Agent 7 (first Stripe integration pass).
 - [ ] **No realistic-volume perf seed.** `scripts/seed-perf.ts` doesn't exist. Without it, perf regressions ship silently.
 - [x] ~~**Cross-cutting `auth.uid()` RLS planner hint.** Agent 8's performance advisor findings noted that 5 policies on `announcements` / `announcement_reads` used `auth.uid()` directly; this was fixed for those tables in `20260425000005_announcements_perf.sql`. The same issue almost certainly exists on other modules' policies but has not been audited.~~ **Resolved** by `20260427000002_auth_uid_initplan_hoisting.sql` (Agent 9 `auth-uid-hoisting` PR). `pg_policies` scan across all 33 RLS policies in `public` found 3 remaining bare calls (2 on `notifications`, 1 on `audit_log`); all rewritten. Regression guard: `supabase/tests/23_no_bare_auth_uid_in_policies.test.sql` asserts zero bare calls on every PR. Diagnostic scan: `scripts/audit-auth-uid-in-policies.sql`.
