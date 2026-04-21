@@ -126,10 +126,29 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
+        shell: bash
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
-          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output env | grep SERVICE_ROLE_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          set -euo pipefail
+          ENV_OUT="$(supabase status --output env)"
+
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E '^(ANON_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY)=' | head -n1 | cut -d= -f2-)"
+          SERVICE_ROLE_KEY="$(echo "$ENV_OUT" | grep -E '^(SERVICE_ROLE_KEY)=' | head -n1 | cut -d= -f2-)"
+
+          if [[ -z "${SUPABASE_URL}" ]]; then
+            echo "Supabase URL is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+          if [[ -z "${ANON_KEY}" ]]; then
+            echo "Supabase ANON key is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
       - run: npm run build
       - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4 --grep-invert "@realtime"
       - name: Upload Playwright report
@@ -164,9 +183,27 @@ jobs:
       - run: supabase start
       - run: supabase db reset --no-seed=false
       - name: Export Supabase local env
+        shell: bash
         run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status --output env | grep API_URL | cut -d= -f2)" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status --output env | grep ANON_KEY | cut -d= -f2)" >> $GITHUB_ENV
+          set -euo pipefail
+          ENV_OUT="$(supabase status --output env)"
+
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(API_URL|NEXT_PUBLIC_SUPABASE_URL)=' | head -n1 | cut -d= -f2-)"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E '^(ANON_KEY|NEXT_PUBLIC_SUPABASE_ANON_KEY)=' | head -n1 | cut -d= -f2-)"
+
+          if [[ -z "${SUPABASE_URL}" ]]; then
+            echo "Supabase URL is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+          if [[ -z "${ANON_KEY}" ]]; then
+            echo "Supabase ANON key is empty; supabase status output was:"
+            echo "$ENV_OUT"
+            exit 1
+          fi
+
+          echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
       - run: npm run build
       - run: npm run test:e2e -- --grep "@realtime"
         continue-on-error: false
