@@ -9,6 +9,7 @@ feature that needs a test, and before opening a PR.
 |---|---|---|---|
 | Unit | **Vitest** | Pure functions, no DB, no network | `tests/unit/**` |
 | Integration | **Vitest** | Real local Supabase via CLI; RLS + server actions | `tests/integration/**` |
+| Perf | **Vitest** | Realistic-volume seeded queries; warm-run timing | `tests/integration/perf/**` |
 | RLS regression | **pgTAP** | DB-level attacks (SELECT/INSERT/UPDATE/DELETE) | `supabase/tests/*.test.sql` |
 | E2E | **Playwright** | Full browser → Next → Supabase | `tests/e2e/**` |
 | Type regressions | **Vitest + expectTypeOf** | Catch Dexie/queue/server-action shape drift | `tests/unit/**/*.types.test.ts` |
@@ -181,6 +182,36 @@ is what users experience.
 
 If a warm run fails the 1.5× check, that's a real regression. It blocks
 merge on nightly and reports by opening an issue against the owning agent.
+
+### Running perf tests locally
+
+Perf tests live in `tests/integration/perf/**` and use the Vitest runner
+against a local Supabase instance with the realistic-volume seed loaded.
+
+```bash
+# 1. Spin up local Supabase + apply the regular seed
+supabase start
+supabase db reset
+
+# 2. Apply the perf-volume seed on top (10k IM submissions, 52×8 ice depth
+#    readings, 100 shifts, 500 announcements). Local-only — refuses to run
+#    against any URL that doesn't look like localhost.
+export $(supabase status --output env | xargs)
+npm run seed:perf
+
+# 3. Run the perf suite
+npm run test:perf
+```
+
+`scripts/seed-perf.ts` is idempotent at the row level: every row carries a
+stable `idempotency_key`, so re-running the seed is a no-op (or fills in
+missing rows if you've bumped a count). It uses the **same seeded users** as
+`supabase/seed.sql` — no new auth.users created, no bcrypt fragility.
+
+Perf tests today live in the `integration` Vitest job. As long as that job is
+`continue-on-error: true` in PR CI, perf assertions surface as warnings rather
+than blockers. They graduate to blocking via the same rule as the rest of the
+integration suite (5 consecutive green runs + no flake history).
 
 ## Coverage
 

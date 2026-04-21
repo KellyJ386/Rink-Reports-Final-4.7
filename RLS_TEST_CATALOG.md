@@ -47,10 +47,10 @@ DELETE) are covered in each module's dedicated pgTAP file. See
 | `option_lists` | Agent 2 | `11_option_lists.test.sql` |
 | `option_list_items` | Agent 2 | `11_option_lists.test.sql` |
 | `ice_maintenance_submissions` | Agent 2 / 3 | `13_ice_maintenance_submissions.test.sql` |
-| `accident_submissions` | Agent 3 | — phase-2 expansion |
-| `incident_submissions` | Agent 3 | — phase-2 expansion |
-| `refrigeration_submissions` | Agent 3 | — phase-2 expansion |
-| `air_quality_submissions` | Agent 3 | — phase-2 expansion |
+| `accident_submissions` | Agent 3 | `14_module_sanity.test.sql` (positive insert + SELECT isolation) + `22_agent_3_per_op_attacks.test.sql` (forge INSERT + UPDATE + DELETE cross-facility) |
+| `incident_submissions` | Agent 3 | `14_module_sanity.test.sql` + `22_agent_3_per_op_attacks.test.sql` |
+| `refrigeration_submissions` | Agent 3 | `14_module_sanity.test.sql` + `22_agent_3_per_op_attacks.test.sql` |
+| `air_quality_submissions` | Agent 3 | `14_module_sanity.test.sql` + `22_agent_3_per_op_attacks.test.sql` |
 | `ice_depth_templates` | Agent 4 | `15_ice_depth.test.sql` |
 | `ice_depth_template_history` | Agent 4 | `15_ice_depth.test.sql` |
 | `ice_depth_sessions` | Agent 4 | `15_ice_depth.test.sql` |

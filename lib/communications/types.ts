@@ -7,15 +7,11 @@ export type Announcement = {
   id: string
   facility_id: string
   author_user_id: string
-  title: string
-  body: string
-  priority: AnnouncementPriority
-  target_audience: TargetAudience
   author_name: string | null
   title: string
   body: string
   priority: AnnouncementPriority
-  target_audience: AnnouncementAudience
+  target_audience: TargetAudience
   target_role_ids: string[] | null
   requires_acknowledgment: boolean
   posted_at: string
