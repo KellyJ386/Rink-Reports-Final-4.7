@@ -259,6 +259,49 @@ Server actions live in `lib/forms/publish.ts`:
 
 Agent 6's admin editor UI wraps these; no other agent invokes them directly.
 
+## Editor contract (Agent 6 consumes this — Phase 2)
+
+Higher-level editor wrappers in `lib/forms/editor.ts` sit on top of `publish.ts` and are what Agent 6's admin UI actually calls. They add: admin-gating, key-immutability enforcement, and an annotated load shape.
+
+- `loadFormSchemaForEditor({ moduleSlug, formType })` → `EditorLoadResult`. Returns the **unresolved** wire format for both `published` and `draft` (the editor renders `{ from_option_list: "…" }` as a reference, not as the resolved items — that's what the runtime render path does). The `annotations` struct carries:
+  - `coreFieldKeys` — keys from the module's `core-fields.ts`. Editor renders their sections locked.
+  - `protectedKeys` — union of every field key that has ever appeared in a published version (current + `form_schema_history`). Renames and removals against these keys are rejected.
+  - `availableOptionListSlugs` — every slug from the caller's facility's `option_lists`. Feed the editor's autocomplete when admin picks `from_option_list`.
+  - `availableResourceTypes` — hardcoded constant (`KNOWN_RESOURCE_TYPES`) today; graduates to DB-driven in Seam 2.
+- `validateDraft({ draftDefinition, schemaId? })` → `EditorValidateResult`. Pure, no writes, no admin gate. Runs meta-schema; if `schemaId` provided, also runs key-immutability against that row's history. Agent 6 calls this as the admin types, to surface problems live.
+- `saveDraft({ schemaId, draftDefinition })` → `EditorSaveResult`. Admin-gate + meta-schema + key-immutability + delegate to `saveFormSchemaDraft`.
+- `publishDraft({ schemaId })` → `EditorPublishResult`. Admin-gate + re-validate draft + key-immutability vs. current + history + delegate to `publishFormSchema`.
+- `discardDraft({ schemaId })` → `EditorDiscardResult`. Admin-gate + delegate to `discardFormSchemaDraft`.
+
+### Key-immutability rule
+
+A field key that has ever been in a published schema for a given `(facility_id, module_slug, form_type)` cannot be removed or renamed. Submissions reference `custom_fields` by key; dropping a key breaks historical detail rendering and strands submissions. To retire a field, mark it optional and hide it with `show_if`.
+
+The check runs in TypeScript (in `editor.ts`, backed by `lib/forms/key-immutability.ts`). The RPC layer does not enforce it today — tracked as hardening follow-up in `KNOWN_GAPS.md`.
+
+### Authorization
+
+Every write action in `editor.ts` calls `has_module_access('admin_control_center', 'admin')` up-front. The underlying RPCs repeat the check. RLS is the outermost layer. This is the same gate pattern used by Communications' `admin-check.ts` — one admin role per facility, not per module.
+
+### Integration pattern for Agent 6
+
+Agent 6's admin editor UI is a client component. It cannot import from `lib/forms/editor.ts` directly (`'server-only'` marker trips). The wiring:
+
+```ts
+// app/admin/forms/[module]/[formType?]/actions.ts
+'use server'
+
+export {
+  loadFormSchemaForEditor,
+  validateDraft,
+  saveDraft,
+  publishDraft,
+  discardDraft,
+} from '@/lib/forms/editor'
+```
+
+Import those from a client component via `'use server'` boundary. Nothing in `lib/forms/editor.ts` needs to change per-module or per-route; one shim file in Agent 6's admin route is enough.
+
 ## New-module checklist (Agent 3 / Agent 4)
 
 1. Create the submission table with the standard columns above + your module's core columns + RLS policies.
