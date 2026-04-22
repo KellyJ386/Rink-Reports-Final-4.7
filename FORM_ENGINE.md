@@ -317,6 +317,43 @@ Import those from a client component via `'use server'` boundary. Nothing in `li
 
 If a convention on this page doesn't fit your module, **stop and ask**. Deviations are the agent-model's biggest risk.
 
+## Option lists admin (Agent 6 consumes — Phase 2 Seam 2)
+
+Admin UI for editing shared dropdown option sources lives at `/admin/option-lists` and calls server actions from `app/admin/option-lists/actions.ts`, which wrap `lib/admin/option-lists.ts`.
+
+### Server actions
+
+Lists:
+
+- `createOptionList({ slug, name, description? })` — slug format `^[a-z][a-z0-9_]*$`, name required. Audits `option_list.created`.
+- `updateOptionList(id, { name?, description? })` — slug is immutable. Audits `option_list.updated`.
+- `deleteOptionList(id)` — refuses if any **published** form schema still references the slug. Returns `references[]` when blocked. Drafts do not block deletion. Audits `option_list.deleted`.
+
+Items:
+
+- `addOptionListItem({ option_list_id, key, label, sort_order? })` — key format `^[a-z0-9][a-z0-9_]*$`, label required, `is_active: true` on create. Audits `option_list_item.created`.
+  - Alias `createOptionListItem` kept for Phase 1 caller compatibility.
+- `renameOptionListItemLabel(id, newLabel)` — changes label only. Previous label captured in audit metadata for a visible diff. Audits `option_list_item.label_renamed`.
+- `deactivateOptionListItem(id)` — sets `is_active: false`. The item disappears from new form renders (resolver filters on `is_active`); historical submissions keep their value via `custom_fields.__label_snapshot`. Audits `option_list_item.deactivated`.
+- `reactivateOptionListItem(id)` — sets `is_active: true`. Audits `option_list_item.reactivated`.
+- `reorderOptionListItems(option_list_id, orderedItemIds)` — sets `sort_order` to the position of each id in the array. Non-atomic across rows (no RPC today); a mid-update failure leaves a recoverable mixed state. Audits `option_list_items.reordered` once per intent, metadata includes the full ordered id list.
+- `updateOptionListItem(id, { label?, sort_order?, is_active? })` — generic patch for Phase 1 callers. New callers should prefer the semantic wrappers above so audit entries carry clear intent.
+
+### Stability invariants (exercised by `tests/integration/form-engine/option-list-stability.test.ts`)
+
+1. **Key is immutable.** `option_list_items.key` has a DB trigger (`tg_option_list_items_key_immutable`) that rejects any UPDATE that changes `key`, including with service-role credentials. To retire an option, deactivate it; to introduce a new name for the same concept, add a new item with a new key.
+2. **Label rename is cosmetic.** Submissions store the key, not the label. A rename changes what new renders and new submissions see; it does not alter historical rows.
+3. **Deactivation is render-layer only.** `lib/forms/resolve-options.ts` filters by `is_active = true`. The item and its historical references persist in the DB.
+4. **Delete-safety is slug-based.** `deleteOptionList` scans `form_schemas.schema_definition` (not drafts) for `from_option_list: "<slug>"` references. Published references block the delete; stale drafts do not.
+
+### Authorization
+
+Every mutation in `lib/admin/option-lists.ts` calls `has_module_access('admin_control_center', 'admin')` up-front. RLS on `option_lists` and `option_list_items` (from migration `20260421000001_option_lists.sql`) enforces the same at the DB boundary. Platform admins pass both checks.
+
+### Audit
+
+Every mutation writes to `audit_log` before returning `{ ok: true }`. Audit write failures propagate to the caller — we deliberately do not swallow them, because an untracked admin mutation is exactly what the table exists to catch.
+
 ## Not your concern
 
 - **Rendering the admin editor** — Agent 6's scope. You just author the meta-schema and the core-fields.ts file; the editor uses them.
