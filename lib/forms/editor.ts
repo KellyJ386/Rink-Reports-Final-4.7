@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { requireAdmin } from '@/lib/admin/require-admin'
 import { createClient } from '@/lib/supabase/server'
 
 import { loadCoreFields } from './load-core-fields'
@@ -30,25 +31,10 @@ import type { FormSchemaDefinitionDoc } from './types'
  * component — the `'server-only'` marker will trip.
  *
  * Authorization: every action checks `has_module_access('admin_control_center',
- * 'admin')` up-front. The underlying RPCs repeat the check (defense in depth
- * + direct-caller protection), so a bug in this file cannot escalate an
- * unprivileged user. RLS is the outermost layer.
+ * 'admin')` up-front via the shared `requireAdmin` gate. The underlying RPCs
+ * repeat the check (defense in depth + direct-caller protection), so a bug in
+ * this file cannot escalate an unprivileged user. RLS is the outermost layer.
  */
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Admin gate
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('has_module_access', {
-    p_module_slug: 'admin_control_center',
-    p_required_level: 'admin',
-  })
-  if (error) return { ok: false, error: error.message }
-  if (!data) return { ok: false, error: 'Admin access required to edit form schemas' }
-  return { ok: true }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // loadFormSchemaForEditor
