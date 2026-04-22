@@ -107,19 +107,47 @@ export const coreFieldsRenderSpec: SectionSpec[] = [{
 export const coreFieldsDbColumns: string[] = ['surface_resource_id']
 ```
 
-## Submission table registry
+## Submission module registry — Phase 2 Seam 3
 
-`lib/forms/submission-tables.ts` maps `module_slug` → table + form_type flag.
-
-Default: `${module_slug}_submissions`, no form_type column.
-
-Override: add a line to `MODULE_TABLE_OVERRIDES` when the convention doesn't fit. Example entry for Ice Maintenance (already present):
+`app/modules/_registry.ts` is the single source of truth for every form-engine module. Every module that uses `submitForm` must be listed here with its slug, its form types (or `null`), its submission table, and the on-disk path to each `core-fields.ts`.
 
 ```ts
-ice_maintenance: { tableName: 'ice_maintenance_submissions', hasFormTypeColumn: true }
+{
+  slug: 'ice_maintenance',                          // matches modules.slug in the DB
+  submissionTable: 'ice_maintenance_submissions',   // the row's target table
+  hasFormTypeColumn: true,                          // one table, many form types
+  forms: [
+    { formType: 'circle_check', coreFieldsPath: 'app/modules/ice-maintenance/circle-check/core-fields.ts' },
+    // …
+  ],
+}
 ```
 
-Custom-UI modules that don't use the engine (`ice_depth`, `scheduling`, `communications`, `admin_control_center`) throw from `getSubmissionTable` — they have their own server actions and should never call `submitForm`.
+Why explicit paths, not derived from slug: module DB slugs are snake_case (`ice_maintenance`, `air_quality`) while the on-disk directories are kebab-case (`ice-maintenance/`, `air-quality/`). Encoding the path removes a translation rule and makes the registry the authoritative map.
+
+### Drift protection
+
+Two self-tests enforce the registry:
+
+1. **`tests/unit/modules/registry-filesystem.test.ts`** (blocking, runs in unit job). For each registered entry, asserts the `coreFieldsPath` exists and exports the three required symbols. Also checks that every `core-fields.ts` on disk is registered — orphans fail the build. Slug and form-type invariants (snake_case, uniqueness, `hasFormTypeColumn` consistency) are asserted too.
+2. **`tests/integration/modules/registry-db.test.ts`** (runs in integration job; currently `continue-on-error` until fixture graduation). Asserts every `(slug, form_type)` has a `module_default_schemas` row and every submission table has the standard columns + idempotency partial unique index.
+
+When Agent 3 or Agent 4 ships a new module: the registry entry, the `core-fields.ts` file, the migration seeding `module_default_schemas`, and the submission table migration all land in the same PR, or the blocking filesystem test fails.
+
+### Escape hatch
+
+For mid-flight refactors where drift is intentionally visible to CI, the workflow doc (`docs/agent-workflow.md`) defines a `Registry-Drift-Acknowledged: <reason>` token that the reviewer can grep for in the PR body. The filesystem test itself always runs and reports; acknowledgement is a human-review signal, not a CI bypass. Use sparingly.
+
+### Accessor API
+
+Callers use `lib/forms/module-registry.ts`:
+
+- `getRegistryEntry(slug)` — full entry or null.
+- `getRegistryForm(slug, formType)` — the specific `(slug, formType)` form spec or null.
+- `getSubmissionTable(slug)` — returns `{ tableName, hasFormTypeColumn }`. Throws on unknown or custom-UI slugs with clear messages. Replaces the Phase 1 function in `lib/forms/submission-tables.ts` (which now re-exports from here for backwards compat).
+- `listAllRegisteredForms()` — flat array of every `(slug, formType)` the engine knows about.
+
+Custom-UI modules (`ice_depth`, `scheduling`, `communications`, `admin_control_center`) live in `CUSTOM_UI_MODULE_SLUGS` in the registry file. `getSubmissionTable` throws a clear error if called with one of their slugs — those modules do their own server actions and should never hit `submitForm`.
 
 ## Submit flow
 
