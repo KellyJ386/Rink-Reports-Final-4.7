@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { requireAdmin } from '@/lib/admin/require-admin'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -7,7 +8,8 @@ import { createClient } from '@/lib/supabase/server'
  *
  * Seam 2 of Agent 2 Phase 2 graduates Phase 1's basic mutators to full
  * editor-contract quality:
- *   - explicit admin gate up-front (defense in depth over RLS)
+ *   - explicit admin gate up-front (defense in depth over RLS) via the
+ *     shared `requireAdmin` from `lib/admin/require-admin.ts`
  *   - audit log entry on every mutation path
  *   - dedicated semantic wrappers (rename / deactivate / reorder) so the
  *     admin UI doesn't need to reconstruct intent from patch shapes
@@ -32,18 +34,6 @@ import { createClient } from '@/lib/supabase/server'
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
-
-async function requireAdmin(
-  supabase: Supabase,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data, error } = await supabase.rpc('has_module_access', {
-    p_module_slug: 'admin_control_center',
-    p_required_level: 'admin',
-  })
-  if (error) return { ok: false, error: error.message }
-  if (!data) return { ok: false, error: 'Admin access required' }
-  return { ok: true }
-}
 
 async function currentFacilityId(supabase: Supabase): Promise<string | null> {
   const { data } = await supabase.rpc('current_facility_id')
