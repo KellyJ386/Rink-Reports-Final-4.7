@@ -2,7 +2,13 @@
 
 import { useState } from 'react'
 
-import { createItemAction, updateItemAction } from '../actions'
+import {
+  addItemAction,
+  deactivateItemAction,
+  reactivateItemAction,
+  renameItemLabelAction,
+  updateItemAction,
+} from '../actions'
 
 type Item = {
   id: string
@@ -26,7 +32,7 @@ export function OptionListItemsEditor({
   const handleAdd = async () => {
     if (!newKey || !newLabel) return
     setError(null)
-    const result = await createItemAction({
+    const result = await addItemAction({
       option_list_id: optionListId,
       key: newKey,
       label: newLabel,
@@ -41,8 +47,30 @@ export function OptionListItemsEditor({
     window.location.reload()
   }
 
-  const handleUpdate = async (id: string, patch: Partial<Item>) => {
-    const result = await updateItemAction(id, patch)
+  // Semantic wrappers from Phase 2 Seam 2 — each writes a distinct audit_log
+  // action so the audit reader sees "label renamed" vs. "deactivated" vs.
+  // "sort reordered" instead of generic "updated".
+
+  const handleLabelRename = async (id: string, newLabelValue: string) => {
+    const result = await renameItemLabelAction(id, newLabelValue)
+    if (!result.ok) setError(result.error)
+    else window.location.reload()
+  }
+
+  const handleActiveToggle = async (id: string, active: boolean) => {
+    const result = active
+      ? await reactivateItemAction(id)
+      : await deactivateItemAction(id)
+    if (!result.ok) setError(result.error)
+    else window.location.reload()
+  }
+
+  // Sort-order changes don't have a dedicated single-item server action (the
+  // semantic wrapper is `reorderOptionListItems` which takes a full ordered
+  // id list — a batch reorder UI is the natural follow-up). For now, the
+  // generic update still fits for one-at-a-time bumps.
+  const handleSortOrderChange = async (id: string, sortOrder: number) => {
+    const result = await updateItemAction(id, { sort_order: sortOrder })
     if (!result.ok) setError(result.error)
     else window.location.reload()
   }
@@ -105,7 +133,7 @@ export function OptionListItemsEditor({
                   defaultValue={it.label}
                   onBlur={(e) => {
                     if (e.target.value !== it.label && e.target.value.trim()) {
-                      handleUpdate(it.id, { label: e.target.value.trim() })
+                      handleLabelRename(it.id, e.target.value.trim())
                     }
                   }}
                   className="flex-1 min-w-[150px]"
@@ -118,7 +146,7 @@ export function OptionListItemsEditor({
                   onBlur={(e) => {
                     const n = Number(e.target.value)
                     if (Number.isFinite(n) && n !== it.sort_order)
-                      handleUpdate(it.id, { sort_order: n })
+                      handleSortOrderChange(it.id, n)
                   }}
                   className="w-20"
                   aria-label="Sort order"
@@ -128,7 +156,7 @@ export function OptionListItemsEditor({
                     type="checkbox"
                     className="w-auto"
                     defaultChecked={it.is_active}
-                    onChange={(e) => handleUpdate(it.id, { is_active: e.target.checked })}
+                    onChange={(e) => handleActiveToggle(it.id, e.target.checked)}
                   />
                   Active
                 </label>
