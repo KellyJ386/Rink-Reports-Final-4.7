@@ -17,12 +17,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
+import type { EditorAnnotations } from '@/lib/forms/editor-types'
 import { validateFormSchema } from '@/lib/forms/meta-schema'
 import { FORM_SCHEMA_FORMAT_VERSION } from '@/lib/forms/types'
 
-import { discardDraftAction, publishAction, saveDraftAction } from './actions'
+import {
+  discardDraftAction,
+  publishAction,
+  saveDraftAction,
+  validateDraftAction,
+} from './actions'
 
 type Draft = {
   $schema?: string
@@ -68,7 +74,15 @@ type Props = {
   currentVersion: number
   currentDefinition: Record<string, unknown>
   draftDefinition: Record<string, unknown> | null
+  /**
+   * EditorAnnotations from Phase 2 Seam 1's `loadFormSchemaForEditor`.
+   * Drives lock badges (core-field keys), rename-block UX (protected keys),
+   * and autocomplete for option-source pickers.
+   */
+  annotations: EditorAnnotations
 }
+
+type KeyImmutabilityError = { key: string; message: string }
 
 function cloneDraft(d: unknown): Draft {
   const base = JSON.parse(JSON.stringify(d ?? { sections: [] })) as Draft
@@ -82,6 +96,7 @@ export function FormSchemaEditor({
   currentVersion,
   currentDefinition,
   draftDefinition,
+  annotations,
 }: Props) {
   const [draft, setDraft] = useState<Draft>(() =>
     cloneDraft(draftDefinition ?? currentDefinition),
@@ -91,7 +106,58 @@ export function FormSchemaEditor({
   const [validationErrors, setValidationErrors] = useState<
     Array<{ path: string; message: string }>
   >([])
+  const [keyImmutabilityErrors, setKeyImmutabilityErrors] = useState<
+    KeyImmutabilityError[]
+  >([])
+  // Live-validation errors, surfaced as the admin types (debounced). Distinct
+  // from the save/publish errors above so the user can tell "the last save
+  // failed" apart from "what I'm typing right now wouldn't publish."
+  const [liveValidationErrors, setLiveValidationErrors] = useState<
+    Array<{ path: string; message: string }>
+  >([])
+  const [liveKeyImmutabilityErrors, setLiveKeyImmutabilityErrors] = useState<
+    KeyImmutabilityError[]
+  >([])
   const [busy, setBusy] = useState<'saving' | 'publishing' | 'discarding' | null>(null)
+
+  const coreFieldKeySet = useMemo(
+    () => new Set(annotations.coreFieldKeys),
+    [annotations.coreFieldKeys],
+  )
+  const protectedKeySet = useMemo(
+    () => new Set(annotations.protectedKeys),
+    [annotations.protectedKeys],
+  )
+
+  // Debounced live validation. Fires 500ms after the admin stops editing;
+  // cheap enough (one server-action round-trip) and specific enough to
+  // show "this draft won't publish" errors inline instead of only at save.
+  const draftJson = JSON.stringify(draft)
+  const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      abortRef.current?.abort()
+      const ac = new AbortController()
+      abortRef.current = ac
+      try {
+        const result = await validateDraftAction(formSchemaId, draft)
+        if (ac.signal.aborted) return
+        if (result.ok) {
+          setLiveValidationErrors([])
+          setLiveKeyImmutabilityErrors([])
+        } else {
+          setLiveValidationErrors(result.validationErrors ?? [])
+          setLiveKeyImmutabilityErrors(result.keyImmutabilityErrors ?? [])
+        }
+      } catch {
+        // Network or abort — silent; live validation is best-effort.
+      }
+    }, 500)
+    return () => clearTimeout(t)
+    // draftJson is the stable snapshot of `draft`; including `draft` itself
+    // would make the effect fire on every re-render regardless of content.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftJson, formSchemaId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -161,6 +227,18 @@ export function FormSchemaEditor({
   }
 
   const removeField = (fieldKey: string) => {
+    if (coreFieldKeySet.has(fieldKey)) {
+      alert(
+        `"${fieldKey}" is a core field and cannot be removed from the draft. Core fields are declared in the module's core-fields.ts and are required by the submission table.`,
+      )
+      return
+    }
+    if (protectedKeySet.has(fieldKey)) {
+      alert(
+        `"${fieldKey}" has been published in a prior version and cannot be removed — existing submissions reference it by key. To retire it, mark it optional and hide it with show_if.`,
+      )
+      return
+    }
     if (!confirm('Remove this field from the draft?')) return
     setDraft({
       ...draft,
@@ -192,6 +270,7 @@ export function FormSchemaEditor({
   const handleSaveDraft = async () => {
     setError(null)
     setValidationErrors([])
+    setKeyImmutabilityErrors([])
     const validation = validateFormSchema(draft)
     if (!validation.ok) {
       setValidationErrors(validation.errors)
@@ -205,6 +284,9 @@ export function FormSchemaEditor({
       if ('validationErrors' in result && result.validationErrors) {
         setValidationErrors(result.validationErrors)
       }
+      if ('keyImmutabilityErrors' in result && result.keyImmutabilityErrors) {
+        setKeyImmutabilityErrors(result.keyImmutabilityErrors)
+      }
       return
     }
   }
@@ -212,6 +294,7 @@ export function FormSchemaEditor({
   const handlePublish = async () => {
     setError(null)
     setValidationErrors([])
+    setKeyImmutabilityErrors([])
     const validation = validateFormSchema(draft)
     if (!validation.ok) {
       setValidationErrors(validation.errors)
@@ -223,6 +306,10 @@ export function FormSchemaEditor({
     if (!('ok' in save) || !save.ok) {
       setBusy(null)
       setError('error' in save ? save.error : 'Save failed')
+      if ('validationErrors' in save && save.validationErrors) setValidationErrors(save.validationErrors)
+      if ('keyImmutabilityErrors' in save && save.keyImmutabilityErrors) {
+        setKeyImmutabilityErrors(save.keyImmutabilityErrors)
+      }
       return
     }
     const pub = await publishAction(formSchemaId)
@@ -230,6 +317,9 @@ export function FormSchemaEditor({
     if (!('ok' in pub) || !pub.ok) {
       setError('error' in pub ? pub.error : 'Publish failed')
       if ('validationErrors' in pub && pub.validationErrors) setValidationErrors(pub.validationErrors)
+      if ('keyImmutabilityErrors' in pub && pub.keyImmutabilityErrors) {
+        setKeyImmutabilityErrors(pub.keyImmutabilityErrors)
+      }
       return
     }
     window.location.reload()
@@ -290,6 +380,40 @@ export function FormSchemaEditor({
             </ul>
           </div>
         )}
+        {keyImmutabilityErrors.length > 0 && (
+          <div className="border border-danger bg-red-50 rounded-md p-3 text-sm mb-3">
+            <strong>Published fields cannot be removed or renamed:</strong>
+            <ul className="list-disc pl-5 mt-1">
+              {keyImmutabilityErrors.map((e, i) => (
+                <li key={i}>
+                  <code className="text-xs">{e.key}</code> — {e.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {/* Live validation — shows as the admin types. Suppressed when an
+            explicit save/publish error is showing, to avoid duplicate noise. */}
+        {error === null &&
+          validationErrors.length === 0 &&
+          keyImmutabilityErrors.length === 0 &&
+          (liveValidationErrors.length > 0 || liveKeyImmutabilityErrors.length > 0) && (
+            <div className="border border-warn bg-amber-50 rounded-md p-3 text-sm mb-3">
+              <strong>Draft has issues — these will block publish:</strong>
+              <ul className="list-disc pl-5 mt-1">
+                {liveValidationErrors.map((e, i) => (
+                  <li key={`v-${i}`}>
+                    <code className="text-xs">{e.path}</code> {e.message}
+                  </li>
+                ))}
+                {liveKeyImmutabilityErrors.map((e, i) => (
+                  <li key={`k-${i}`}>
+                    <code className="text-xs">{e.key}</code> (published before) — cannot remove or rename
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
         <div className="flex flex-col gap-4">
           {draft.sections.map((section, sIdx) => (
@@ -357,6 +481,8 @@ export function FormSchemaEditor({
                         key={f.key}
                         field={f}
                         isSelected={selectedKey === f.key}
+                        isCore={coreFieldKeySet.has(f.key)}
+                        isProtected={protectedKeySet.has(f.key)}
                         onSelect={() => setSelectedKey(selectedKey === f.key ? null : f.key)}
                         onRemove={() => removeField(f.key)}
                       />
@@ -391,6 +517,10 @@ export function FormSchemaEditor({
             onChange={(patch) => updateField(selectedField.field.key, patch)}
             onClose={() => setSelectedKey(null)}
             allPriorFieldKeys={priorKeysUpTo(draft, selectedField.field.key)}
+            isCore={coreFieldKeySet.has(selectedField.field.key)}
+            isProtected={protectedKeySet.has(selectedField.field.key)}
+            availableOptionListSlugs={annotations.availableOptionListSlugs}
+            availableResourceTypes={annotations.availableResourceTypes}
           />
         ) : (
           <section className="border border-hairline rounded-md p-4 text-sm text-muted">
@@ -408,11 +538,15 @@ export function FormSchemaEditor({
 function SortableFieldRow({
   field,
   isSelected,
+  isCore,
+  isProtected,
   onSelect,
   onRemove,
 }: {
   field: Field
   isSelected: boolean
+  isCore: boolean
+  isProtected: boolean
   onSelect: () => void
   onRemove: () => void
 }) {
@@ -424,6 +558,12 @@ function SortableFieldRow({
     transition,
     opacity: isDragging ? 0.5 : 1,
   }
+  const cannotRemove = isCore || isProtected
+  const removeTooltip = isCore
+    ? 'Core field — cannot be removed. Managed in the module\'s core-fields.ts.'
+    : isProtected
+      ? 'Published in a prior version — cannot be removed. Mark optional + hide with show_if to retire.'
+      : 'Remove field'
   return (
     <li
       ref={setNodeRef}
@@ -452,13 +592,31 @@ function SortableFieldRow({
           · {field.type}
           {field.required ? ' · required' : ''}
           {field.show_if ? ' · conditional' : ''}
+          {isCore && (
+            <>
+              {' · '}
+              <span title="Core field" aria-label="core field">🔒 core</span>
+            </>
+          )}
+          {!isCore && isProtected && (
+            <>
+              {' · '}
+              <span title="Published — key is immutable" aria-label="protected key">📌 published</span>
+            </>
+          )}
         </span>
       </button>
       <button
         type="button"
         onClick={onRemove}
-        className="bg-transparent border border-danger text-danger px-2 py-1 rounded text-xs min-h-0"
-        aria-label="Remove field"
+        disabled={cannotRemove}
+        title={removeTooltip}
+        aria-label={removeTooltip}
+        className={
+          cannotRemove
+            ? 'bg-transparent border border-hairline text-muted px-2 py-1 rounded text-xs min-h-0 cursor-not-allowed'
+            : 'bg-transparent border border-danger text-danger px-2 py-1 rounded text-xs min-h-0'
+        }
       >
         ⓧ
       </button>
@@ -471,11 +629,19 @@ function FieldEditor({
   onChange,
   onClose,
   allPriorFieldKeys,
+  isCore,
+  isProtected,
+  availableOptionListSlugs,
+  availableResourceTypes,
 }: {
   field: Field
   onChange: (patch: Partial<Field>) => void
   onClose: () => void
   allPriorFieldKeys: string[]
+  isCore: boolean
+  isProtected: boolean
+  availableOptionListSlugs: string[]
+  availableResourceTypes: string[]
 }) {
   const hasOptions = field.type === 'select' || field.type === 'multiselect' || field.type === 'radio'
   const hasNumericBounds = field.type === 'number' || field.type === 'slider'
@@ -490,10 +656,22 @@ function FieldEditor({
           ? 'from_resource_type'
           : 'inline'
 
+  // Datalist id scoped per-field to avoid collisions when multiple editors render.
+  const optionListDatalistId = `option-list-slugs-${field.key}`
+
+  const keyLocked = isCore || isProtected
+  const keyLockReason = isCore
+    ? 'Core field — key is defined in the module\'s core-fields.ts and cannot be changed from the admin.'
+    : 'This key has been published in a prior version. Renaming would strand existing submissions. To retire the field, mark it optional and hide with show_if.'
+
   return (
     <section className="border border-accent rounded-md p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Edit field: {field.key}</h3>
+        <h3 className="font-semibold">
+          Edit field: {field.key}
+          {isCore && <span className="ml-2 text-xs text-muted">🔒 core</span>}
+          {!isCore && isProtected && <span className="ml-2 text-xs text-muted">📌 published</span>}
+        </h3>
         <button
           type="button"
           onClick={onClose}
@@ -510,10 +688,14 @@ function FieldEditor({
           type="text"
           value={field.key}
           onChange={(e) => onChange({ key: e.target.value })}
+          disabled={keyLocked}
           className="font-mono"
+          title={keyLocked ? keyLockReason : undefined}
         />
         <span className="text-xs text-muted">
-          Do not change after submissions exist — existing rows won't rewrite.
+          {keyLocked
+            ? keyLockReason
+            : 'Do not change after submissions exist — existing rows won\'t rewrite.'}
         </span>
       </label>
 
@@ -649,9 +831,19 @@ function FieldEditor({
                   onChange={(e) => onChange({ options: { from_option_list: e.target.value } })}
                   placeholder="e.g. hazards"
                   className="font-mono"
+                  list={optionListDatalistId}
                 />
+                <datalist id={optionListDatalistId}>
+                  {availableOptionListSlugs.map((slug) => (
+                    <option key={slug} value={slug} />
+                  ))}
+                </datalist>
                 <span className="text-xs text-muted">
-                  Manage lists at /admin/option-lists.
+                  {availableOptionListSlugs.length === 0
+                    ? 'No option lists exist yet. Create one at /admin/option-lists.'
+                    : `${availableOptionListSlugs.length} list${
+                        availableOptionListSlugs.length === 1 ? '' : 's'
+                      } available. Manage at /admin/option-lists.`}
                 </span>
               </label>
             )}
@@ -667,12 +859,15 @@ function FieldEditor({
                   onChange={(e) => onChange({ options: { from_resource_type: e.target.value } })}
                 >
                   <option value="">—</option>
-                  <option value="surface">surface</option>
-                  <option value="compressor">compressor</option>
-                  <option value="zamboni">zamboni</option>
-                  <option value="air_quality_device">air_quality_device</option>
-                  <option value="shift_position">shift_position</option>
+                  {availableResourceTypes.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
                 </select>
+                <span className="text-xs text-muted">
+                  Resolves at render from facility_resources filtered by current facility + is_active.
+                </span>
               </label>
             )}
         </div>

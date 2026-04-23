@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { loadFormSchemaForEditor } from '@/lib/forms/editor'
 import { createClient } from '@/lib/supabase/server'
 import { FORM_SCHEMA_FORMAT_VERSION } from '@/lib/forms/types'
 
@@ -14,34 +15,28 @@ export default async function AdminFormSchemaEditorPage({
   const { module, form_type: ftParam } = await params
   const formType = ftParam === '_' ? null : ftParam
 
-  const supabase = await createClient()
+  // Phase 2 Seam 1 contract: bundles the published doc, the draft (or null),
+  // the version, and the annotations the editor needs — core-field keys for
+  // lock badges, protected keys for rename-block UX, available option-list
+  // slugs + resource types for autocomplete.
+  const result = await loadFormSchemaForEditor({ moduleSlug: module, formType })
+  if (!result.ok) notFound()
 
-  const query = supabase
-    .from('form_schemas')
-    .select(
-      'id, facility_id, module_slug, form_type, schema_definition, draft_definition, version, is_published, updated_at, modules!inner(name)',
-    )
-    .eq('module_slug', module)
-
-  const { data: row } = formType
-    ? await query.eq('form_type', formType).maybeSingle()
-    : await query.is('form_type', null).maybeSingle()
-
-  if (!row) notFound()
+  const moduleName = await fetchModuleDisplayName(module)
 
   return (
     <main>
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-semibold">
-            {(row.modules as { name?: string } | null)?.name ?? module}
+            {moduleName ?? module}
             {formType && (
               <span className="ml-2 text-muted font-normal text-base">· {formType}</span>
             )}
           </h1>
           <p className="text-muted text-sm">
-            Published v{row.version} · {FORM_SCHEMA_FORMAT_VERSION}
-            {row.draft_definition && <> · <span className="text-warn">Draft pending</span></>}
+            Published v{result.version} · {FORM_SCHEMA_FORMAT_VERSION}
+            {result.draft && <> · <span className="text-warn">Draft pending</span></>}
           </p>
         </div>
         <div className="flex gap-2 text-sm">
@@ -57,12 +52,29 @@ export default async function AdminFormSchemaEditorPage({
 
       <div className="hidden md:block mt-4">
         <FormSchemaEditor
-          formSchemaId={row.id as string}
-          currentVersion={row.version as number}
-          currentDefinition={row.schema_definition as Record<string, unknown>}
-          draftDefinition={(row.draft_definition as Record<string, unknown> | null) ?? null}
+          formSchemaId={result.schemaId}
+          currentVersion={result.version}
+          currentDefinition={result.published as Record<string, unknown>}
+          draftDefinition={(result.draft as Record<string, unknown> | null) ?? null}
+          annotations={result.annotations}
         />
       </div>
     </main>
   )
+}
+
+/**
+ * The editor contract intentionally doesn't return the module display name —
+ * it's cosmetic, not core to the contract. One extra select keeps the page
+ * header friendly. RLS scopes this to the caller's facility (admin access is
+ * required to reach /admin at all).
+ */
+async function fetchModuleDisplayName(slug: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('modules')
+    .select('name')
+    .eq('slug', slug)
+    .maybeSingle()
+  return (data as { name?: string } | null)?.name ?? null
 }

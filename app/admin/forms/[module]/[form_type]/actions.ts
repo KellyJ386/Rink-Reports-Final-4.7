@@ -1,24 +1,17 @@
 'use server'
 
-import { discardDraft, publishDraft, saveDraft } from '@/lib/forms/editor'
+import { discardDraft, publishDraft, saveDraft, validateDraft } from '@/lib/forms/editor'
 
 /**
- * Slim migration from Phase 1 `lib/forms/publish.ts` to Phase 2 Seam 1
- * `lib/forms/editor.ts`. Same external call signatures so the existing
- * FormSchemaEditor component needs zero changes — but every save/publish
- * now runs through the editor contract:
+ * Thin server-action shim over `lib/forms/editor.ts` (Phase 2 Seam 1).
  *
- *   - Explicit admin gate (`has_module_access('admin_control_center', 'admin')`)
- *     before any write. Phase 1 relied on RPC-internal checks; Seam 1 moved
- *     it to the TS boundary as well, defense in depth.
- *   - Key-immutability enforcement — renames or removals of previously-published
- *     field keys are rejected with a structured error. The slim UI surfaces
- *     these via the existing `result.error` message; a follow-up PR renders
- *     `keyImmutabilityErrors` as field-level annotations.
+ * saveDraft / publishDraft / discardDraft run admin-gated + key-immutability-
+ * enforced writes. validateDraft is the editor's live-feedback path — pure,
+ * no writes, no admin gate (cost-sensitive; fires on every keystroke once
+ * debounced).
  *
- * Return shapes are supersets of the Phase 1 contract (same `ok`, `error`,
- * `validationErrors` fields; new `keyImmutabilityErrors` is additive), so
- * existing callers continue to work unchanged.
+ * Return shapes are supersets of Phase 1 (additive `keyImmutabilityErrors`),
+ * so existing callers keep working.
  */
 
 export async function saveDraftAction(formSchemaId: string, draft: unknown) {
@@ -31,4 +24,8 @@ export async function publishAction(formSchemaId: string) {
 
 export async function discardDraftAction(formSchemaId: string) {
   return discardDraft({ schemaId: formSchemaId })
+}
+
+export async function validateDraftAction(formSchemaId: string, draft: unknown) {
+  return validateDraft({ schemaId: formSchemaId, draftDefinition: draft })
 }
