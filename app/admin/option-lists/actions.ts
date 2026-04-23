@@ -1,9 +1,14 @@
 'use server'
 
 import {
+  addOptionListItem,
   createOptionList,
   createOptionListItem,
+  deactivateOptionListItem,
   deleteOptionList,
+  reactivateOptionListItem,
+  renameOptionListItemLabel,
+  reorderOptionListItems,
   updateOptionList,
   updateOptionListItem,
 } from '@/lib/admin/option-lists'
@@ -29,9 +34,34 @@ export async function createItemAction(input: {
   return createOptionListItem(input)
 }
 
+export async function addItemAction(input: {
+  option_list_id: string
+  key: string
+  label: string
+  sort_order?: number
+}) {
+  return addOptionListItem(input)
+}
+
 export async function updateItemAction(
   id: string,
   patch: { label?: string; sort_order?: number; is_active?: boolean },
 ) {
   return updateOptionListItem(id, patch)
+}
+
+export async function renameItemLabelAction(id: string, newLabel: string) {
+  return renameOptionListItemLabel(id, newLabel)
+}
+
+export async function deactivateItemAction(id: string) {
+  return deactivateOptionListItem(id)
+}
+
+export async function reactivateItemAction(id: string) {
+  return reactivateOptionListItem(id)
+}
+
+export async function reorderItemsAction(optionListId: string, orderedItemIds: string[]) {
+  return reorderOptionListItems(optionListId, orderedItemIds)
 }

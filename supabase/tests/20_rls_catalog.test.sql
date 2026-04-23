@@ -176,11 +176,8 @@ select ok((select rowsecurity from pg_tables where schemaname='public' and table
 select cmp_ok((select count(*)::int from pg_policies where schemaname='public' and tablename='form_schema_history'),
   '>=', 1, 'form_schema_history: at least one RLS policy defined');
 select _test_as('00000002-0000-0000-0000-000000002003'::uuid);
-select is(
-  (select count(*)::int from public.form_schema_history child
-     join public.form_schemas parent on parent.id = child.form_schema_id
-     where parent.facility_id = '00000001-0000-0000-0000-000000000001'::uuid),
-  0, 'form_schema_history: beta staff sees zero rows via form_schemas.form_schema_id');
+select is((select count(*)::int from public.form_schema_history where facility_id = '00000001-0000-0000-0000-000000000001'::uuid),
+  0, 'form_schema_history: beta staff sees zero alpha rows (column: facility_id)');
 reset role;
 
 -- ============================================================================

@@ -65,11 +65,11 @@ all 32 tenant tables. Per-operation attacks (INSERT with forged `facility_id`,
 UPDATE that moves a row, DELETE cross-facility) live in per-module pgTAP
 files today and are uneven:
 
-- **Strong coverage**: `02_tenant_isolation.test.sql`, `07_facility_invites.test.sql`, `17_agent_7.test.sql`, `18_communications.test.sql`, `19_scheduling.test.sql`, `21_form_engine_per_op_attacks.test.sql` (new — covers `form_schemas`, `option_list_items`, `ice_maintenance_submissions` cross-facility UPDATE + DELETE)
+- **Strong coverage**: `02_tenant_isolation.test.sql`, `07_facility_invites.test.sql`, `17_agent_7.test.sql`, `18_communications.test.sql`, `19_scheduling.test.sql`, `21_form_engine_per_op_attacks.test.sql` (covers `form_schemas`, `option_list_items`, `ice_maintenance_submissions` cross-facility UPDATE + DELETE), `22_agent_3_per_op_attacks.test.sql` (covers accident, incident, refrigeration, air_quality cross-facility forge-INSERT + UPDATE + DELETE)
 - **Partial coverage**: `15_ice_depth.test.sql` (covers SELECT + INSERT; gaps on UPDATE/DELETE cross-facility)
-- **Minimal coverage**: Agent 3's four standalone submission tables (accident, incident, refrigeration, air_quality)
+- **Minimal coverage**: `13_ice_maintenance_submissions.test.sql` (covered for INSERT-forge + SELECT; per-op UPDATE/DELETE pending — tracked as follow-up).
 
-**Plan**: next engine-hardening-style pass targets the 4 standalone Agent 3 submission tables, prioritising `accident_submissions` and `incident_submissions` (highest data-sensitivity — injury records).
+**Next**: extend `15_ice_depth.test.sql` with cross-facility UPDATE + DELETE for `ice_depth_templates`, `ice_depth_sessions`, `ice_depth_readings`. Same template as `21_form_engine_per_op_attacks.test.sql` + `22_agent_3_per_op_attacks.test.sql`. Lower priority than the Agent 3 standalone tables (Ice Depth templates are not injury records).
 
 ### Cross-module integration tests (from Agent 9 brief §6)
 
@@ -96,16 +96,17 @@ Lands with Agent 7's offline queue feature pass, per the directive.
 
 ### Performance smoke (brief §7)
 
-Requires a `scripts/seed-perf.ts` that generates realistic-volume data (10k Ice Maintenance
-submissions, 52 × 8 Ice Depth readings, etc.). Warm-run assertions with 1.5×
-headroom per TESTING.md.
+Seed + warm-run pattern shipped via `agent-9/perf-seed-foundation` PR. Remaining
+scenarios land per-PR using the same template as
+`tests/integration/perf/ice-maintenance-history.perf.test.ts`. Warm-run with
+1.5× headroom per TESTING.md.
 
-- [ ] `scripts/seed-perf.ts`
-- [ ] `tests/perf/ice-maintenance-history.perf.ts` — < 1s at 10k submissions (warm)
-- [ ] `tests/perf/week-builder.perf.ts` — < 1s at 100 shifts × 20 staff (warm)
-- [ ] `tests/perf/ice-depth-trends.perf.ts` — < 1s at 52 × 8 points (warm)
-- [ ] `tests/perf/form-editor.perf.ts` — < 2s at 50-field schema (warm)
-- [ ] `tests/perf/communications-history.perf.ts` — first page < 500ms at 500 announcements (warm)
+- [x] **`scripts/seed-perf.ts`** — local-only seeder; idempotent on `idempotency_key`. 10k Ice Maintenance submissions, 52 sessions × 8 Ice Depth readings, 100 shifts, 500 announcements. Refuses to run against non-local URLs.
+- [x] **`tests/integration/perf/ice-maintenance-history.perf.test.ts`** — warm-run assertion under 1.5s, plus 200-row paged scan.
+- [ ] `tests/integration/perf/week-builder.perf.test.ts` — < 1.5s at 100 shifts × 20 staff (warm). Seed-side: shifts already there; assignments would graduate to test if needed.
+- [ ] `tests/integration/perf/ice-depth-trends.perf.test.ts` — < 1.5s at 52 × 8 points (warm).
+- [ ] `tests/integration/perf/form-editor.perf.test.ts` — < 3s at 50-field schema (warm). Seed-side: needs a 50-field draft schema; trivial extension to seed-perf.
+- [ ] `tests/integration/perf/communications-history.perf.test.ts` — first page < 750ms at 500 announcements (warm).
 
 ### Type-level regression tests
 
@@ -139,11 +140,23 @@ list is Agent 9's job; resolving items is the owning agent's.
   - Deterministic UI label selectors — currently E2E tests bind to `getByLabel(/email/i)` etc., which are stable enough for today's shell but would break if any module agent renames a form field
   - Seeded password-grant sign-in verified against the same CLI version CI uses
   Owner: Agent 9 phase-2. **Must flip to blocking before production launch.**
-- [ ] **Rate limiting is single-instance in-memory.** `/api/accept-invite` uses an in-memory token bucket; a multi-instance deploy loses the guarantee. Owner: Agent 7. Acceptance: Upstash-backed or equivalent shared limiter on at least `/accept-invite`, `/api/stripe/webhook`, and any future high-value endpoint.
+- [ ] **Rate limiting is single-instance in-memory.** `/api/accept-invite` uses an in-memory token bucket; a multi-instance deploy loses the guarantee.
+  - **Decision locked (2026-04-20):** **Upstash Redis** + `@upstash/ratelimit`. Rationale:
+    - Smallest surface — two env vars (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) + one package (~20 lines of glue at the limited-endpoint level).
+    - **Single vendor relationship** — `@upstash/qstash` is already in our dependency list for scheduled jobs, so this adds no new provider.
+    - Free tier (10k requests/day) is 2–3× the combined projected volume of `/accept-invite` + `/api/stripe/webhook` for the first 1,000 facilities.
+    - Reversible — swapping to a different KV provider (Redis Cloud, Vercel KV, a pg_rate_limit function) is a 5-line change at the `Ratelimit.fixedWindow(...)` call site. Low lock-in cost.
+    - Rejected alternatives:
+      - **`pg_rate_limit` (DB function):** ties rate limiting to DB availability — if Supabase hiccups, the limiter fails open. Also adds a DB round-trip per limited request.
+      - **Vercel Edge KV:** only works on Vercel; locks us deeper into the platform and leaves rate limiting broken if we ever run on a non-Vercel host.
+  - **Acceptance (unchanged):** Upstash-backed or equivalent shared limiter on at least `/accept-invite`, `/api/stripe/webhook`, and any future high-value endpoint. Owner: Agent 7 in the next Agent 7 feature pass.
 - [ ] **Stripe fixture files are not yet committed.** `tests/fixtures/stripe/README.md` documents the capture process but the JSON files are absent. Without them, the phase-2 "Stripe trial → active" E2E can't land. Owner: Agent 7 (first Stripe integration pass).
-- [ ] **No realistic-volume perf seed.** `scripts/seed-perf.ts` doesn't exist. Without it, perf regressions ship silently.
-- [ ] **Cross-cutting `auth.uid()` RLS planner hint.** Agent 8's performance advisor findings noted that 5 policies on `announcements` / `announcement_reads` used `auth.uid()` directly; this was fixed for those tables in `20260425000005_announcements_perf.sql`. The same issue almost certainly exists on other modules' policies but has not been audited. Owner: Agent 9 + module owners. Acceptance: a scripted audit of all `pg_policies.qual` + `with_check` expressions flagging bare `auth.uid()` calls.
-- [ ] **Cross-cutting `SET search_path` on trigger functions.** 15 trigger functions (pre-existing, across all prior agents) are flagged `function_search_path_mutable` by Supabase's security advisor. Low-severity WARN but real. Owner: rotating. Acceptance: one migration that `ALTER FUNCTION ... SET search_path = public, pg_temp` on all 15.
+- [x] ~~**`loadCoreFields` dynamic-import path uses the raw slug, not the on-disk directory name.** `lib/forms/load-core-fields.ts` computes `@/app/modules/${moduleSlug}/${formType}/core-fields` where `moduleSlug` is snake_case (`ice_maintenance`, `air_quality`) but the actual directories are kebab-case (`ice-maintenance/`, `air-quality/`). Single-word modules (`accident`, `incident`, `refrigeration`) are unaffected because slug = directory. Multi-word modules and every Ice Maintenance form type may currently fail at `import()` resolution — surfaces as "core-fields module not found" at render or submit time. The Seam 3 registry (`app/modules/_registry.ts`) encodes the explicit on-disk path per (slug, formType); the fix is to consume the registry from `loadCoreFields` instead of re-deriving the path.~~ **Resolved** by the `agent-2/post-phase-2-hardening` PR. `loadCoreFields` now looks up `(moduleSlug, formType)` in the registry, parses `coreFieldsPath` into directory segments, and dynamic-imports with webpack-friendly template literals. Regression guard: `tests/unit/forms/load-core-fields.test.ts` asserts all 8 registered entries resolve (including the previously-broken `air_quality` and all four `ice_maintenance` form types).
+- [ ] **Branch protection is disabled on the default branch (`main1`).** `GET /repos/.../branches` returns `protected: false` for `main1`. Evidence the gap is live, not theoretical: the April 2026 "merge storm" landed four back-to-back PRs (#24/#25/#26/#27) whose auto-merge reconciliation left `middleware.ts` with three stacked env-var guards, a duplicated `createServerClient(...)` block (tsc failed with 6 errors), and a `package-lock.json` missing `fsevents`. The fixup shipped as **three direct-to-main1 commits** (`090c33e`, `4bb5a46`, `f8ce7f6`), two of which have identical commit messages and overlapping diffs — force-push / rebase residue. Without protection, this recurs on the next merge-heavy window (e.g., Agent 2 Phase 2's three-seam landing). Acceptance: `main` requires PR + passing required status checks; direct pushes rejected for all users including admins; force-pushes to `main` rejected unconditionally. Also planned in the same admin pass: rename `main1` → `main` (safe — old `main` tip `a8d9539` is a strict ancestor of `main1`; no commits would be lost) and delete the `claude/set-main-default-branch-2OrNp` leftover. Owner: repo admin (one-time Settings → Branches action). **Must land before public launch.** Codified convention in `docs/agent-workflow.md` (no-direct-commits + merge-reconciliation sections).
+- [ ] **`middleware.ts` silently bypasses auth when Supabase env vars are missing.** Current main1 `middleware.ts` early-returns the response without creating a Supabase client if `NEXT_PUBLIC_SUPABASE_URL` doesn't start with `http` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is absent. The guard exists for CI resilience (so tests that run before `supabase start` don't crash the server), but in production it means a misconfigured deployment — one where env vars failed to populate at build time or got rotated out — serves every route as if the user were unauthenticated. No "fail closed" path; no startup assertion. Acceptance: either (a) separate the CI-only guard from the production middleware (distinct entry points), or (b) fail hard on missing env vars in production builds via a startup assertion, keeping the soft-skip only under `NODE_ENV !== 'production'`. Owner: Agent 7 (platform/infra). Surfaced during Agent 2 Phase 2 pre-read of main1 diff.
+- [x] ~~**No realistic-volume perf seed.** `scripts/seed-perf.ts` doesn't exist. Without it, perf regressions ship silently.~~ **Resolved** by `agent-9/perf-seed-foundation` PR. `scripts/seed-perf.ts` ships realistic volumes (10k IM submissions, 52×8 ice depth readings, 100 shifts, 500 announcements) with a local-URL safety guard. First representative perf test (`tests/integration/perf/ice-maintenance-history.perf.test.ts`) consumes it via the warm-run pattern in TESTING.md. Remaining 4 perf scenarios are tracked under "Performance smoke (brief §7)" above and land per-PR using the same template.
+- [x] ~~**Cross-cutting `auth.uid()` RLS planner hint.** Agent 8's performance advisor findings noted that 5 policies on `announcements` / `announcement_reads` used `auth.uid()` directly; this was fixed for those tables in `20260425000005_announcements_perf.sql`. The same issue almost certainly exists on other modules' policies but has not been audited.~~ **Resolved** by `20260427000002_auth_uid_initplan_hoisting.sql` (Agent 9 `auth-uid-hoisting` PR). `pg_policies` scan across all 33 RLS policies in `public` found 3 remaining bare calls (2 on `notifications`, 1 on `audit_log`); all rewritten. Regression guard: `supabase/tests/23_no_bare_auth_uid_in_policies.test.sql` asserts zero bare calls on every PR. Diagnostic scan: `scripts/audit-auth-uid-in-policies.sql`.
+- [x] ~~**Cross-cutting `SET search_path` on trigger functions.** 15 trigger functions (pre-existing, across all prior agents) are flagged `function_search_path_mutable` by Supabase's security advisor.~~ **Resolved** by `20260427000001_trigger_search_path_hygiene.sql` (Agent 9 `search-path-hygiene` PR). Remote advisor confirms zero remaining `function_search_path_mutable` findings post-apply.
 
 ### Soft blockers (acceptable at launch with explicit sign-off)
 
