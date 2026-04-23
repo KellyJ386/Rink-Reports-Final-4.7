@@ -35,6 +35,23 @@ Single domain, path-based. Every user lands at `https://app.rinkreports.com` (or
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN` | Optional | Error tracking. Missing → console only |
 | `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` | Optional | Product analytics. Missing → disabled |
 | `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | Yes in production | Scheduled job signature verification |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Yes in production | Shared rate limiter (`lib/rate-limit/limiter.ts`). Missing in production → module-level throw. Missing in dev/CI → in-memory fallback |
+
+## Rate limiting
+
+Shared `Ratelimit.fixedWindow` via `@upstash/ratelimit` + `@upstash/redis`. One `Ratelimit` instance per bucket in `lib/rate-limit/limiter.ts`, keyed by `rl:<bucket>:<identifier>`:
+
+| Bucket | Limit | Applied at |
+|---|---|---|
+| `accept-invite` | 5 per 15 min per IP | `lib/invites/accept.ts` (`lookupInvite`, `acceptInvite`) |
+| `invite-create` | 20 per hour per IP | Reserved — wired when `/admin/invites` creation hits the hot path |
+
+Adding a bucket: extend `RATE_LIMITS` in `lib/rate-limit/config.ts` (must set `requests`, `windowMs`, and `upstashWindow`; the two representations must agree since they feed the Upstash path and the in-memory fallback respectively), then call `await consume('<bucket>', identifier)` at the call site.
+
+**Failure modes:**
+- Missing env vars in production → module-level throw. A silently-degraded limiter is worse than a 500.
+- Missing env vars in dev/CI → in-memory fallback (`lib/rate-limit/in-memory.ts`). Same API; per-process state. Tests exercise this path directly via `consumeInMemory` + `__resetInMemoryBucketsForTests`.
+- Runtime Redis error → fail open + log. Rate limiting is best-effort; making it a single point of failure for `/accept-invite` is the wrong trade.
 
 ## Offline queue
 
