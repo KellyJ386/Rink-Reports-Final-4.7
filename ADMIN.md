@@ -120,14 +120,21 @@ Recipe (step-by-step so future agents can follow blind):
 
 ## Phase 2 editor contract consumption
 
-Since the `agent-6/consume-phase-2-contracts` PR, `/admin/forms/.../actions.ts` wraps `lib/forms/editor.ts` (Seam 1) rather than `lib/forms/publish.ts` directly. Every save and publish now runs through the explicit admin gate + key-immutability enforcement at the TS boundary (RPC-internal checks remain as defense in depth). Return shapes are supersets — existing UI surfaces `result.error` which now includes the key-immutability message verbatim when triggered. A follow-up PR can render `keyImmutabilityErrors` as field-level UI annotations and consume `loadFormSchemaForEditor`'s `EditorAnnotations` (core-field lock badges, protected-key rename blocks, option-list slug autocomplete).
+`/admin/forms/.../page.tsx` loads via `loadFormSchemaForEditor` (Seam 1) and receives the annotated bundle: published doc, draft (or null), version, plus `EditorAnnotations` — `coreFieldKeys`, `protectedKeys`, `availableOptionListSlugs`, `availableResourceTypes`. `actions.ts` wraps `saveDraft` / `publishDraft` / `discardDraft` / `validateDraft` from `lib/forms/editor.ts`. Every save and publish runs through the explicit admin gate + key-immutability enforcement at the TS boundary (RPC-internal checks remain as defense in depth).
 
-`/admin/option-lists/[id]` likewise uses Seam 2's semantic server actions (`renameOptionListItemLabel`, `deactivateOptionListItem`, `reactivateOptionListItem`) so audit entries carry clear intent. Sort-order still uses the generic `updateOptionListItem` because a one-at-a-time bump doesn't fit the batch `reorderOptionListItems` API; a drag-reorder UI consuming that batch action is the natural follow-up.
+What the annotations drive in `FormSchemaEditor.tsx`:
+
+- **Core-field lock badges** (`🔒 core`) on rows for any field in `coreFieldKeys`. Remove button disabled with a tooltip explaining it's declared in the module's `core-fields.ts`. Key input in the field editor is disabled.
+- **Published-key badges** (`📌 published`) on rows for any field in `protectedKeys` that isn't also core. Remove button disabled; key input disabled with a tooltip pointing to the retire-via-`show_if` workaround.
+- **Option-list slug autocomplete** via `<datalist>` on the `from_option_list` input, sourced from `availableOptionListSlugs`. Falls back to free text so unknown-yet slugs can be typed ahead of creation.
+- **Resource-type select** populated from `availableResourceTypes` instead of a hardcoded list — future additions to `KNOWN_RESOURCE_TYPES` surface automatically.
+- **Live validation**: 500ms-debounced `validateDraftAction` call on every draft edit. Surfaces an amber "Draft has issues — these will block publish" banner with both meta-schema errors and key-immutability violations. Suppressed when an explicit save/publish error banner is showing (no duplicate noise).
+
+`/admin/option-lists/[id]` uses Seam 2's semantic server actions (`renameOptionListItemLabel`, `deactivateOptionListItem`, `reactivateOptionListItem`) so audit entries carry clear intent. Sort-order still uses the generic `updateOptionListItem` because a one-at-a-time bump doesn't fit the batch `reorderOptionListItems` API; a drag-reorder UI consuming that batch action is the natural follow-up.
 
 ## Known gaps / deferred
 
 - **Form schema editor preview pane**: v1 editor shows the schema tree but not a live `<DynamicForm />` preview. Admins can click "View history" → "Copy JSON" to paste into a new draft, which covers rollback. Live preview is a v2 polish item.
-- **Form editor annotations UI**: Seam 1's `loadFormSchemaForEditor` returns `coreFieldKeys`, `protectedKeys`, `availableOptionListSlugs`, `availableResourceTypes` — not yet rendered. Slim migration landed; annotation UI is the natural follow-up PR.
 - **Drag-drop section reorder**: v1 uses up/down arrows for sections; @dnd-kit sortable list for fields within a section.
 - **Section move for fields**: editing which section a field belongs to requires remove-and-re-add in v1. v2 can add a "Move to section" dropdown.
 - **Drag-reorder for option list items**: Seam 2's `reorderOptionListItems` batch API ships unused; v1 admin still bumps `sort_order` one at a time.
