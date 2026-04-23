@@ -97,9 +97,11 @@ See `lib/auth/force-logout.ts` — file-level docstring lists the acceptance cri
 | `/admin/invites` (revoke)                 | `revokeInvite` (lib/invites/revoke.ts)                |
 | `/admin/invites` (resend)                 | `resendInvite` (lib/invites/resend.ts, Agent 6 ships) |
 | `/admin/modules` (toggle on)              | `enableModule` (lib/facility/enable-module.ts)        |
-| `/admin/forms/.../(save)`                 | `saveFormSchemaDraft` (lib/forms/publish.ts)          |
-| `/admin/forms/.../(publish)`              | `publishFormSchema` (lib/forms/publish.ts)            |
-| `/admin/forms/.../(discard)`              | `discardFormSchemaDraft` (lib/forms/publish.ts)       |
+| `/admin/forms/.../(save)`                 | `saveDraft` (lib/forms/editor.ts — Phase 2 Seam 1)    |
+| `/admin/forms/.../(publish)`              | `publishDraft` (lib/forms/editor.ts — Phase 2 Seam 1) |
+| `/admin/forms/.../(discard)`              | `discardDraft` (lib/forms/editor.ts — Phase 2 Seam 1) |
+| `/admin/option-lists/<id>` (rename label) | `renameOptionListItemLabel` (lib/admin/option-lists)  |
+| `/admin/option-lists/<id>` (de/reactivate)| `deactivateOptionListItem` / `reactivateOptionListItem` |
 | `/admin/users` (deactivate / force logout)| `forceLogoutUser` (lib/auth/force-logout.ts)          |
 | `/admin/billing` (Manage)                 | Disabled — Agent 7's Stripe Portal action             |
 
@@ -116,11 +118,19 @@ Recipe (step-by-step so future agents can follow blind):
 7. Add a nav link in `app/admin/layout.tsx` under the appropriate section.
 8. Update this `ADMIN.md` sitemap + settings catalog.
 
+## Phase 2 editor contract consumption
+
+Since the `agent-6/consume-phase-2-contracts` PR, `/admin/forms/.../actions.ts` wraps `lib/forms/editor.ts` (Seam 1) rather than `lib/forms/publish.ts` directly. Every save and publish now runs through the explicit admin gate + key-immutability enforcement at the TS boundary (RPC-internal checks remain as defense in depth). Return shapes are supersets — existing UI surfaces `result.error` which now includes the key-immutability message verbatim when triggered. A follow-up PR can render `keyImmutabilityErrors` as field-level UI annotations and consume `loadFormSchemaForEditor`'s `EditorAnnotations` (core-field lock badges, protected-key rename blocks, option-list slug autocomplete).
+
+`/admin/option-lists/[id]` likewise uses Seam 2's semantic server actions (`renameOptionListItemLabel`, `deactivateOptionListItem`, `reactivateOptionListItem`) so audit entries carry clear intent. Sort-order still uses the generic `updateOptionListItem` because a one-at-a-time bump doesn't fit the batch `reorderOptionListItems` API; a drag-reorder UI consuming that batch action is the natural follow-up.
+
 ## Known gaps / deferred
 
 - **Form schema editor preview pane**: v1 editor shows the schema tree but not a live `<DynamicForm />` preview. Admins can click "View history" → "Copy JSON" to paste into a new draft, which covers rollback. Live preview is a v2 polish item.
+- **Form editor annotations UI**: Seam 1's `loadFormSchemaForEditor` returns `coreFieldKeys`, `protectedKeys`, `availableOptionListSlugs`, `availableResourceTypes` — not yet rendered. Slim migration landed; annotation UI is the natural follow-up PR.
 - **Drag-drop section reorder**: v1 uses up/down arrows for sections; @dnd-kit sortable list for fields within a section.
 - **Section move for fields**: editing which section a field belongs to requires remove-and-re-add in v1. v2 can add a "Move to section" dropdown.
+- **Drag-reorder for option list items**: Seam 2's `reorderOptionListItems` batch API ships unused; v1 admin still bumps `sort_order` one at a time.
 - **Audit log full-text search**: not v1 — offset pagination + action/date filters cover the common case.
 - **Bulk user import**: v2.
 - **Force-logout**: v1 is inline in `lib/auth/force-logout.ts`. Agent 7 replaces.
