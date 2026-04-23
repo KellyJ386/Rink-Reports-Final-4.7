@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { missingProductionSupabaseEnv } from '@/lib/env/require-production-supabase-env'
+
 /**
  * Auth middleware.
  *
@@ -13,17 +15,31 @@ import { NextResponse, type NextRequest } from 'next/server'
  * RLS lives in Postgres. This middleware handles only the auth-side gate; it does not
  * duplicate tenant isolation logic.
  */
+
+// Fail-closed assertion evaluated once per edge runtime cold start. The silent
+// soft-skip below is fine for CI + local dev, but in production a misconfigured
+// deploy would serve every route as unauthenticated — worse than a 500.
+{
+  const missing = missingProductionSupabaseEnv()
+  if (missing.length > 0) {
+    throw new Error(
+      `middleware: required Supabase env vars missing in production: ${missing.join(', ')}. ` +
+        `Refusing to serve — would silently bypass the auth gate. ` +
+        `Set them in the hosting platform's environment variables and redeploy.`,
+    )
+  }
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // If env vars are missing or invalid (e.g. misconfigured CI or preview deploy),
-  // skip auth middleware rather than crashing the server with an
-  // "Invalid supabaseUrl" error.
-  // If env vars are missing or invalid (e.g. in CI before Supabase starts),
-  // skip session refresh gracefully rather than crashing the server.
+  // Non-production soft-skip: CI runs before `supabase start`, and local dev
+  // without a `.env.local`, must not crash. Production is already guarded by
+  // the module-level assertion above, so this branch can only be taken outside
+  // production.
   if (!supabaseUrl?.startsWith('http') || !supabaseAnonKey) {
     return response
   }
