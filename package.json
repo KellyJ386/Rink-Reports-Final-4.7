@@ -30,6 +30,8 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.0",
     "@upstash/qstash": "^2.7.22",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.37.0",
     "dexie": "^4.0.10",
     "hast-util-sanitize": "^5.0.2",
     "next": "15.1.11",

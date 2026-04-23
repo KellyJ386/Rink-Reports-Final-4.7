@@ -2,7 +2,7 @@ import 'server-only'
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { createClient as createSsrClient } from '@/lib/supabase/server'
-import { consume } from './rate-limit'
+import { consume } from '@/lib/rate-limit/limiter'
 
 export type InviteLookupResult =
   | { state: 'valid'; invite_id: string; facility_id: string; facility_name: string; email: string; role_id: string; role_name: string }
@@ -18,7 +18,7 @@ export type InviteLookupResult =
  * Rate-limited per client IP: 5 attempts per 15 minutes.
  */
 export async function lookupInvite(rawToken: string, clientIp: string): Promise<InviteLookupResult> {
-  if (!consume('accept-invite', clientIp)) {
+  if (!(await consume('accept-invite', clientIp))) {
     // Treat as not_found to avoid leaking whether the token exists. Caller renders
     // a 429 if they can distinguish, otherwise the generic "invalid" state.
     return { state: 'not_found' }
@@ -88,7 +88,7 @@ export type AcceptInviteResult =
 export async function acceptInvite(input: AcceptInviteInput): Promise<AcceptInviteResult> {
   const { rawToken, password, fullName, clientIp } = input
 
-  if (!consume('accept-invite', clientIp)) {
+  if (!(await consume('accept-invite', clientIp))) {
     return { ok: false, reason: 'rate_limited' }
   }
 
