@@ -127,20 +127,25 @@ from public.modules m
 on conflict (role_id, module_id) do update set access_level = excluded.access_level;
 
 -- Alpha users (auth.users + public.users + user_roles)
+-- Emails + passwords match SEEDED_USERS in tests/factories/supabase-client.ts.
+-- Drift between these and the fixture constants breaks every loginAs(...) call
+-- in the E2E suite. The integration test
+-- `tests/integration/factories/seeded-users-signin.test.ts` enforces the match
+-- by attempting `auth.signInWithPassword` for every SEEDED_USERS entry.
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role, instance_id)
 values
-  ('00000001-0000-0000-0000-000000001001', 'admin@alpha.test', crypt('alpha-admin', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-  ('00000001-0000-0000-0000-000000001002', 'manager@alpha.test', crypt('alpha-manager', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-  ('00000001-0000-0000-0000-000000001003', 'staff@alpha.test', crypt('alpha-staff', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-  ('00000001-0000-0000-0000-000000001004', 'deactivated@alpha.test', crypt('alpha-deact', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000')
+  ('00000001-0000-0000-0000-000000001001', 'admin-alpha@rinkreports.test',       crypt('alpha-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+  ('00000001-0000-0000-0000-000000001002', 'manager-alpha@rinkreports.test',     crypt('alpha-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+  ('00000001-0000-0000-0000-000000001003', 'staff-alpha@rinkreports.test',       crypt('alpha-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+  ('00000001-0000-0000-0000-000000001004', 'deactivated-alpha@rinkreports.test', crypt('alpha-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000')
 on conflict (id) do nothing;
 
 insert into public.users (id, facility_id, full_name, email, active)
 values
-  ('00000001-0000-0000-0000-000000001001', '00000001-0000-0000-0000-000000000001', 'Alpha Admin',   'admin@alpha.test',       true),
-  ('00000001-0000-0000-0000-000000001002', '00000001-0000-0000-0000-000000000001', 'Alpha Manager', 'manager@alpha.test',     true),
-  ('00000001-0000-0000-0000-000000001003', '00000001-0000-0000-0000-000000000001', 'Alpha Staff',   'staff@alpha.test',       true),
-  ('00000001-0000-0000-0000-000000001004', '00000001-0000-0000-0000-000000000001', 'Alpha Deact',   'deactivated@alpha.test', false)
+  ('00000001-0000-0000-0000-000000001001', '00000001-0000-0000-0000-000000000001', 'Alpha Admin',   'admin-alpha@rinkreports.test',       true),
+  ('00000001-0000-0000-0000-000000001002', '00000001-0000-0000-0000-000000000001', 'Alpha Manager', 'manager-alpha@rinkreports.test',     true),
+  ('00000001-0000-0000-0000-000000001003', '00000001-0000-0000-0000-000000000001', 'Alpha Staff',   'staff-alpha@rinkreports.test',       true),
+  ('00000001-0000-0000-0000-000000001004', '00000001-0000-0000-0000-000000000001', 'Alpha Deact',   'deactivated-alpha@rinkreports.test', false)
 on conflict (id) do nothing;
 
 insert into public.user_roles (user_id, role_id)
@@ -201,18 +206,19 @@ select
 from public.modules m
 on conflict (role_id, module_id) do update set access_level = excluded.access_level;
 
+-- Beta users. Emails + passwords match SEEDED_USERS; see Alpha note above.
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role, instance_id)
 values
-  ('00000002-0000-0000-0000-000000002001', 'admin@beta.test',   crypt('beta-admin',   gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-  ('00000002-0000-0000-0000-000000002002', 'manager@beta.test', crypt('beta-manager', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-  ('00000002-0000-0000-0000-000000002003', 'staff@beta.test',   crypt('beta-staff',   gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000')
+  ('00000002-0000-0000-0000-000000002001', 'admin-beta@rinkreports.test',   crypt('beta-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+  ('00000002-0000-0000-0000-000000002002', 'manager-beta@rinkreports.test', crypt('beta-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+  ('00000002-0000-0000-0000-000000002003', 'staff-beta@rinkreports.test',   crypt('beta-dev-only', gen_salt('bf')), now(), now(), now(), 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000')
 on conflict (id) do nothing;
 
 insert into public.users (id, facility_id, full_name, email, active)
 values
-  ('00000002-0000-0000-0000-000000002001', '00000002-0000-0000-0000-000000000002', 'Beta Admin',   'admin@beta.test',   true),
-  ('00000002-0000-0000-0000-000000002002', '00000002-0000-0000-0000-000000000002', 'Beta Manager', 'manager@beta.test', true),
-  ('00000002-0000-0000-0000-000000002003', '00000002-0000-0000-0000-000000000002', 'Beta Staff',   'staff@beta.test',   true)
+  ('00000002-0000-0000-0000-000000002001', '00000002-0000-0000-0000-000000000002', 'Beta Admin',   'admin-beta@rinkreports.test',   true),
+  ('00000002-0000-0000-0000-000000002002', '00000002-0000-0000-0000-000000000002', 'Beta Manager', 'manager-beta@rinkreports.test', true),
+  ('00000002-0000-0000-0000-000000002003', '00000002-0000-0000-0000-000000000002', 'Beta Staff',   'staff-beta@rinkreports.test',   true)
 on conflict (id) do nothing;
 
 insert into public.user_roles (user_id, role_id)

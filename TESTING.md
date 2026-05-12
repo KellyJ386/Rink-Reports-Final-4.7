@@ -80,6 +80,8 @@ Template: `tests/e2e/form-submission.spec.ts`. Follow it.
 - Isolate by using a unique suffix in any name/email you create. Parallel shards run concurrently.
 - Clean up any cross-context work (`await freshContext.close()`).
 
+**Seeded-user drift.** The canonical list of test credentials is `SEEDED_USERS` in `tests/factories/supabase-client.ts`. `supabase/seed.sql` must produce `auth.users` + `public.users` rows whose `email` and password match every entry. Drift between the two is enforced by `tests/integration/factories/seeded-users-signin.test.ts` — every SEEDED_USERS entry must sign in successfully, and the session's `user.id` / `user.email` must match the fixture. Update both sides in the same PR.
+
 ## PR requirements
 
 1. Branch name: `agent-N/phase-N-description`.
